@@ -1,0 +1,35 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "\u914d\u7f6e TWAQ Monitor",
+                "data": {
+                    "api_key": "\u8f38\u5165\u4f60\u7684 API Key",
+                    "siteID": "\u9078\u64c7\u6e2c\u7ad9(\u8907\u9078)"
+                }
+            }
+        },
+        "abort": {
+            "single_instance_allowed": "\u53ea\u5141\u8a31\u55ae\u4e00\u914d\u7f6e"
+        },
+        "error": {
+            "no_api": "\u8acb\u8f38\u5165\u4f60\u7684API KEY!",
+            "no_id": "\u81f3\u5c11\u9078\u64c7\u4e00\u500b\u6e2c\u7ad9"
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "\u914d\u7f6e TWAQ Monitor",
+                "data": {
+                    "api_key": "\u8f38\u5165\u4f60\u7684 API Key",
+                    "siteID": "\u9078\u64c7\u6e2c\u7ad9(\u8907\u9078)"
+                }
+            }
+        },
+        "error": {
+            "no_api": "\u8acb\u8f38\u5165\u4f60\u7684API KEY!",
+            "no_id": "\u81f3\u5c11\u9078\u64c7\u4e00\u500b\u6e2c\u7ad9"
+        }
+    }
+}

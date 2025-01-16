@@ -1,0 +1,35 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "Configure TWAQ Monitor",
+                "data": {
+                    "api_key": "Enter your API Key",
+                    "siteID": "Select Site(Multiple Selection)"
+                }
+            }
+        },
+        "abort": {
+            "single_instance_allowed": "Only a single configuration of Voice Recorder is allowed."
+        },
+        "error": {
+            "no_api": "Please enter your API KEY!",
+            "no_id": "Please select at least one site"
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Configure TWAQ Monitor",
+                "data": {
+                    "api_key": "Enter your API Key",
+                    "siteID": "Select Site(Multiple Selection)"
+                }
+            }
+        },
+        "error": {
+            "no_api": "Please enter your API KEY!",
+            "no_id": "Please select at least one site"
+        }
+    }
+}

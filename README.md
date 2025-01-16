@@ -1,81 +1,49 @@
-# Taiwan AQI - Home Assistant 自訂整合
 
-這個 Home Assistant 的自訂整合可以讓你監控台灣各地的空氣品質資料，並提供即時的 AQI（空氣品質指標）數據。此整合會從台灣的各個監測站擷取資料，並且為每個空氣品質指標（如 PM2.5、PM10、O3、NO2、SO2、CO 以及 AQI）建立獨立的感測器實體。此外，它還支援透過 Home Assistant 服務手動更新 AQI 資料。
+ [![Contributors][contributors-shield]][contributors-url]
+ [![Forks][forks-shield]][forks-url]
+ [![Stargazers][stars-shield]][stars-url]
+ [![Issues][issues-shield]][issues-url]
+ [![License][license-shield]][license-url]
 
-## 功能
-- 擷取中華民國環境部各監測站的空氣品質資料。
-- 提供以下獨立的感測器實體：
-  - AQI（空氣品質指數）
-  - PM2.5（細懸浮微粒）
-  - PM10（懸浮微粒）
-  - O3（臭氧）
-  - NO2（二氧化氮）
-  - SO2（二氧化硫）
-  - CO（一氧化碳）
-- 支援協調器進行的定期更新，更新間隔可配置。
-- 提供 Home Assistant 服務，手動更新所有 AQI 感測器資料。
-- 顯示額外屬性（如測站名稱和上次更新時間），提供更好的上下文資訊。
+ [contributors-shield]: https://img.shields.io/github/contributors/kukuxx/HA-TaiwanAQM.svg?style=for-the-badge
+ [contributors-url]: https://github.com/kukuxx/HA-TaiwanAQM/graphs/contributors
 
-## 安裝
+ [forks-shield]: https://img.shields.io/github/forks/kukuxx/HA-TaiwanAQM.svg?style=for-the-badge
+ [forks-url]: https://github.com/kukuxx/HA-TaiwanAQM/network/members
 
-### 手動安裝
-1. 下載此專案，並將 `taiwan_aqi` 資料夾放置到 Home Assistant 的 `custom_components` 資料夾中。
-2. 重啟 Home Assistant。
+ [stars-shield]: https://img.shields.io/github/stars/kukuxx/HA-TaiwanAQM.svg?style=for-the-badge
+ [stars-url]: https://github.com/kukuxx/HA-TaiwanAQM/stargazers
 
-### 設定
-1. 在 Home Assistant 中，導航至 **設定** > **設備與服務** > **新增整合**。
-2. 搜尋 **Taiwan AQI**，並按照螢幕上的指示進行設定。
-3. 你需要提供：
-   - **API 金鑰**：存取空氣品質資料的 API 金鑰。
-   - **監測站**：選擇你想要監控的台灣空氣品質監測站。
+ [issues-shield]: https://img.shields.io/github/issues/kukuxx/HA-TaiwanAQM.svg?style=for-the-badge
+ [issues-url]: https://github.com/kukuxx/HA-TaiwanAQM/issues
 
-## 使用方式
-- 安裝完成後，你將會看到各個空氣品質指標的感測器實體。
+ [license-shield]: https://img.shields.io/github/license/kukuxx/HA-TaiwanAQM.svg?style=for-the-badge
+ [license-url]: https://github.com/kukuxx/HA-TaiwanAQM/blob/main/LICENSE
 
-## 貢獻
-歡迎 fork 此專案、提交問題、並建立 pull requests。任何貢獻都十分歡迎！
 
-## 授權
-此專案採用 MIT 授權條款。
+# HA-TaiwanAQM
 
----
+- [English](/README.md) | [繁體中文](/README-zh-TW.md)
 
-# Taiwan AQI - Home Assistant Integration
+> <b>This integration can monitor air quality across Taiwan.<br>
+> The data source is the <a href='https://data.moenv.gov.tw/'>Environmental Data Open Platform API of the Taiwan Ministry of the Environment</a>.<br>
+> Before using the integration, remember to first become a member and apply for an API KEY.</b>
 
-This custom integration for [Home Assistant](https://www.home-assistant.io/) allows you to monitor air quality from various stations in Taiwan. It fetches real-time AQI (Air Quality Index) data and provides individual sensor entities for key air quality indicators such as PM2.5, PM10, O3, NO2, SO2, CO, and AQI. Additionally, it supports manual updates through a Home Assistant service.
+>[!Important]
+> The API KEY is <b>valid for only 1 year</b>. If the <b>API KEY expires</b>, please <b>follow the instructions in the email</b> you received when you became a member to reapply for a new API KEY.
 
-## Features
-- Fetches air quality data for selected stations across Taiwan.
-- Provides separate sensor entities for:
-  - AQI (Air Quality Index)
-  - PM2.5 (Fine Particulate Matter)
-  - PM10 (Particulate Matter)
-  - O3 (Ozone)
-  - NO2 (Nitrogen Dioxide)
-  - SO2 (Sulfur Dioxide)
-  - CO (Carbon Monoxide)
-- Supports periodic updates through a coordinator with a configurable interval.
-- Includes a service to manually update AQI data across all sensors.
-- Displays additional attributes such as the station name and last update time for better context.
+> [!Tip]
+> If you encounter a bug during use, <br>
+> please enable <b>debug mode</b> in the integration and try the original operation, <br>
+> then open issues and post the log.
 
-## Installation
+## Instructions for use
 
-### Manual Installation
-1. Download the repository and place the `taiwan_aqi` folder inside your Home Assistant `custom_components` directory.
-2. Restart Home Assistant.
+- It is recommended to use <b>HACS</b> to install. If you want to install manually,please put the <b>taiwan_aqm</b> folder in <b>custom_components</b> folder, and restart <b>Home assistant</b>.
+<br>After the restart is completed, search for <b>Taiwan Air Quality Monitor</b> in the integration and set it up.
 
-### Configuration
-1. In Home Assistant, navigate to **Configuration** > **Devices & Services** > **Add Integration**.
-2. Search for **Taiwan AQI** and follow the on-screen instructions.
-3. You will need to provide:
-   - **API Key**: An API key to access the air quality data.
-   - **Monitoring Station**: Select your preferred air quality monitoring station in Taiwan.
+  [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=kukuxx&repository=HA-TaiwanAQM&category=Integration)
 
-## Usage
-- After installation, you will see sensor entities created for each air quality indicator.
+## Credits
 
-## Contributions
-Feel free to fork this project, submit issues, and create pull requests. Contributions are welcome!
-
-## License
-This project is licensed under the MIT License.
+- This project is forked from <a href='https://github.com/besthand/TaiwanAQI'>besthand/TaiwanAQI</a>
