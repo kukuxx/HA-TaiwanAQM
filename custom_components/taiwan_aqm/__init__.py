@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 import logging
 
@@ -10,9 +8,19 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr
 
 from .coordinator import AQMCoordinator
-from .const import DOMAIN, PLATFORM, UPDATE_INTERVAL
+from .const import (
+    DOMAIN,
+    CONF_API_KEY,
+    CONF_SITEID,
+    COORDINATOR,
+    API_KEY,
+    SITEID,
+    PLATFORM,
+    UPDATE_INTERVAL,
+)
 
 CONFIG_SCHEMA = cv.removed(DOMAIN, raise_if_present=True)
 _LOGGER = logging.getLogger(__name__)
@@ -28,8 +36,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     try:
         hass.data.setdefault(DOMAIN, {})
         coordinator = AQMCoordinator(hass, entry, UPDATE_INTERVAL)
+        hass.data[DOMAIN][entry.entry_id] = {
+            COORDINATOR: coordinator,
+            API_KEY: entry.data.get(CONF_API_KEY, ""),
+            SITEID: entry.data.get(CONF_SITEID, []),
+        }
         await coordinator.async_config_entry_first_refresh()
-        hass.data[DOMAIN][entry.entry_id] = coordinator
         # 初始化感測器平台
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORM)
 
@@ -53,7 +65,26 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     try:
         unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORM)
+
         if unload_ok:
+            old_siteid = hass.data[DOMAIN][entry.entry_id].get(SITEID, [])
+            new_siteid = entry.data.get(CONF_SITEID, [])
+            del_dev_identifiers = {
+                (DOMAIN, id)
+                for id in old_siteid if id not in new_siteid
+            }
+            _LOGGER.info(f"remove dev_identifiers: {del_dev_identifiers}")
+            if del_dev_identifiers:
+                dev_reg = dr.async_get(hass)
+                devices = [
+                    device for device in
+                    dr.async_entries_for_config_entry(dev_reg, entry.entry_id)
+                    if device.identifiers & del_dev_identifiers
+                ]
+                for dev in devices:
+                    dev_reg.async_remove_device(dev.id)
+                    _LOGGER.info(f"removed device: {dev.id}")
+
             hass.data[DOMAIN].pop(entry.entry_id)
             return True
         else:

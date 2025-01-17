@@ -1,9 +1,17 @@
+from __future__ import annotations
+
 import logging
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, CONF_SITEID, SITENAME_DICT, SENSOR_INFO
+from .const import (
+    DOMAIN,
+    SITENAME_DICT,
+    SENSOR_INFO,
+    SITEID,
+    COORDINATOR,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -11,8 +19,8 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up Taiwan AQM sensors from a config entry."""
     try:
-        siteid = entry.data[CONF_SITEID]
-        coordinator = hass.data[DOMAIN][entry.entry_id]
+        siteid = hass.data[DOMAIN][entry.entry_id].get(SITEID, [])
+        coordinator = hass.data[DOMAIN][entry.entry_id].get(COORDINATOR, None)
 
         entities = [
             AQMSensor(
@@ -75,10 +83,11 @@ class AQMSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self):
-        if self._data and self.siteid in self._data and self._data[
-            self.siteid].get(self._type, None):
-            return self._data[self.siteid].get(self._type)
-        return "unknown"
+        if self._is_valid_data():
+            return self._data[self.siteid].get(self._type, None)
+        if self._device_class is None:
+            return "unknown"
+        return 0
 
     @property
     def device_class(self):
@@ -128,8 +137,16 @@ class AQMSensor(CoordinatorEntity, SensorEntity):
     @property
     def unique_id(self):
         sanitized_name = self._type.replace(" ", "_") if self._type else "unknown"
-        return f"twaqm_{self._sitename}_{sanitized_name}"
+        return f"{DOMAIN}_{self.siteid}_{sanitized_name}"
 
     @property
     def icon(self):
         return self._icon
+
+    def _is_valid_data(self):
+        if (
+            self._data and self.siteid in self._data
+            and self._type in self._data.get(self.siteid, {})
+        ):
+            return True
+        return False

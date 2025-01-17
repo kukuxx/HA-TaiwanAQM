@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import asyncio
 
@@ -6,7 +8,7 @@ from aiohttp import ClientError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN, API_URL, CONF_API_KEY, CONF_SITEID
+from .const import DOMAIN, API_URL, API_KEY, SITEID
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -28,8 +30,8 @@ class AQMCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self):
         """Fetch data from API."""
-        api_key = self.entry.data[CONF_API_KEY]
-        id = self.entry.data[CONF_SITEID]
+        api_key = self.hass.data[DOMAIN][self.entry.entry_id].get(API_KEY, "")
+        id = self.hass.data[DOMAIN][self.entry.entry_id].get(SITEID, [])
         data = await self._get_data(api_key, id)
         if data:
             return data
@@ -44,7 +46,7 @@ class AQMCoordinator(DataUpdateCoordinator):
         for attempt in range(3):
             try:
                 async with self.session.get(
-                    API_URL, params=params, ssl=False, timeout=20
+                    API_URL, params=params, ssl=False, timeout=30
                 ) as response:
                     if response.ok:
                         try:
@@ -61,7 +63,9 @@ class AQMCoordinator(DataUpdateCoordinator):
                                 return None
                         except Exception as e:
                             msg = await response.text()
-                            _LOGGER.error(f"Failed to parse JSON response: {e}")
+                            _LOGGER.error(
+                                f"Failed to parse JSON response: {e}, response: {msg}"
+                            )
                             await self.hass.services.async_call(
                                 "notify", "persistent_notification", {
                                     "message": f"{msg}",

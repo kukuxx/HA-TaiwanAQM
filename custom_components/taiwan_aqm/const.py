@@ -5,6 +5,9 @@ from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 DOMAIN = "taiwan_aqm"
 CONF_API_KEY = "api_key"
 CONF_SITEID = "siteID"
+COORDINATOR = "COORDINATOR"
+API_KEY = "API_KEY"
+SITEID = "SITEID"
 API_URL = "https://data.moenv.gov.tw/api/v2/aqx_p_432"
 UPDATE_INTERVAL = timedelta(minutes=5)
 PLATFORM = [Platform.SENSOR]

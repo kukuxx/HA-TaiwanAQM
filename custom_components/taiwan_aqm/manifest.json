@@ -1,15 +1,18 @@
 {
   "codeowners": [
-    "@kukuxxx"
+    "@kukuxx"
   ],
   "domain": "taiwan_aqm",
   "name": "Taiwan Air Quality Monitor",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "documentation": "https://github.com/kukuxx/HA-TaiwanAQM",
   "issue_tracker": "https://github.com/kukuxx/HA-TaiwanAQM/issues",
   "requirements": [],
   "dependencies": [],
   "integration_type": "hub",
+  "loggers": [
+    "taiwan_aqm"
+  ],
   "config_flow": true,
   "iot_class": "cloud_polling"
 }
