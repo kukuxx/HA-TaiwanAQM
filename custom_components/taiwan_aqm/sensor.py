@@ -84,7 +84,7 @@ class AQMSensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self):
         if self._is_valid_data():
-            return self._data[self.siteid].get(self._type, None)
+            return self._data[self.siteid].get(self._type)
         if self._device_class is None:
             return "unknown"
         return 0
@@ -146,7 +146,7 @@ class AQMSensor(CoordinatorEntity, SensorEntity):
     def _is_valid_data(self):
         if (
             self._data and self.siteid in self._data
-            and self._type in self._data.get(self.siteid, {})
+            and self._data.get(self.siteid, {}).get(self._type, None)
         ):
             return True
         return False

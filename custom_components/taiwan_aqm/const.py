@@ -9,7 +9,7 @@ COORDINATOR = "COORDINATOR"
 API_KEY = "API_KEY"
 SITEID = "SITEID"
 API_URL = "https://data.moenv.gov.tw/api/v2/aqx_p_432"
-UPDATE_INTERVAL = timedelta(minutes=5)
+UPDATE_INTERVAL = timedelta(minutes=8)
 PLATFORM = [Platform.SENSOR]
 
 SITEID_DICT = {
