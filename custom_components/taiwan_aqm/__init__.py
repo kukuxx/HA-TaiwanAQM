@@ -9,6 +9,7 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.event import async_track_time_change
 
 from .coordinator import AQMCoordinator
 from .const import (
@@ -18,6 +19,7 @@ from .const import (
     COORDINATOR,
     API_KEY,
     SITEID,
+    TASK,
     PLATFORM,
     UPDATE_INTERVAL,
 )
@@ -36,10 +38,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     try:
         hass.data.setdefault(DOMAIN, {})
         coordinator = AQMCoordinator(hass, entry, UPDATE_INTERVAL)
+
+        async def refresh_task(*args):
+            await coordinator.async_refresh()
+            _LOGGER.info(
+                f"Refresh Success at: {args[0].strftime('%Y-%m-%d %H:%M:%S %Z')}"
+            )
+
+        task = async_track_time_change(hass, refresh_task, minute=10, second=0)
         hass.data[DOMAIN][entry.entry_id] = {
             COORDINATOR: coordinator,
             API_KEY: entry.data.get(CONF_API_KEY, ""),
             SITEID: entry.data.get(CONF_SITEID, []),
+            TASK: task,
         }
         await coordinator.async_config_entry_first_refresh()
         # 初始化感測器平台
@@ -64,7 +75,11 @@ async def update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     try:
-        unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORM)
+        task = hass.data[DOMAIN][entry.entry_id].get(TASK)
+        task()
+        unload_ok = await hass.config_entries.async_unload_platforms(
+            entry, PLATFORM
+        )
 
         if unload_ok:
             old_siteid = hass.data[DOMAIN][entry.entry_id].get(SITEID, [])
@@ -86,6 +101,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     _LOGGER.info(f"removed device: {dev.id}")
 
             hass.data[DOMAIN].pop(entry.entry_id)
+            if DOMAIN in hass.data and not hass.data[DOMAIN]:
+                hass.data.pop(DOMAIN)
+
             return True
         else:
             return False
@@ -97,17 +115,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload the config entry."""
     await hass.config_entries.async_reload(entry.entry_id)
-
-
-async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Handle removal of an entry."""
-    try:
-        await hass.config_entries.async_unload_platforms(entry, PLATFORM)
-
-        if DOMAIN in hass.data and not hass.data[DOMAIN]:
-            hass.data.pop(DOMAIN)
-    except Exception as e:
-        _LOGGER.error(f"async_remove_entry error {e}")
 
 
 # async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
