@@ -8,8 +8,10 @@ CONF_SITEID = "siteID"
 COORDINATOR = "COORDINATOR"
 API_KEY = "API_KEY"
 SITEID = "SITEID"
+TASK = "TIMER_TASK"
 API_URL = "https://data.moenv.gov.tw/api/v2/aqx_p_432"
-UPDATE_INTERVAL = timedelta(minutes=8)
+HA_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HomeAssistant/HA-TaiwanAQM"
+UPDATE_INTERVAL = timedelta(minutes=11)
 PLATFORM = [Platform.SENSOR]
 
 SITEID_DICT = {

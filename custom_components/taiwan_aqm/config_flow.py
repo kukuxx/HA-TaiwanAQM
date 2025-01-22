@@ -63,7 +63,6 @@ class TaiwanAQMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     data=user_input,
                 )
 
-        # 顯示縣市-測站選項和 API Key 輸入框
         schema = vol.Schema(
             {
                 vol.Required(CONF_API_KEY): TEXT_SELECTOR,

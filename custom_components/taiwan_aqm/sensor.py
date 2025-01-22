@@ -20,12 +20,12 @@ async def async_setup_entry(hass, entry, async_add_entities):
     """Set up Taiwan AQM sensors from a config entry."""
     try:
         siteid = hass.data[DOMAIN][entry.entry_id].get(SITEID, [])
-        coordinator = hass.data[DOMAIN][entry.entry_id].get(COORDINATOR, None)
+        coordinator = hass.data[DOMAIN][entry.entry_id].get(COORDINATOR)
 
         entities = [
             AQMSensor(
-                coordinator, id, SITENAME_DICT[id], aq_type, value["dc"], value["unit"],
-                value["sc"], value["dp"], value["icon"]
+                coordinator, id, SITENAME_DICT[id], aq_type, value["dc"],
+                value["unit"], value["sc"], value["dp"], value["icon"]
             ) for aq_type, value in SENSOR_INFO.items() for id in siteid
         ]
         async_add_entities(entities)
@@ -59,18 +59,12 @@ class AQMSensor(CoordinatorEntity, SensorEntity):
         self._display_precision = display_precision
         self._icon = icon
         _LOGGER.debug(
-            "Initialized TaiwanAQMEntity for siteid: %s, type: %s", siteid, aq_type
+            f"Initialized TaiwanAQMEntity for siteid: {self.siteid}, type: {self._type}"
         )
 
     @property
     def _data(self):
-        if not self.coordinator.data:
-            data = {}
-            _LOGGER.warning("Coordinator data is empty for siteid: %s", self.siteid)
-        else:
-            data = self.coordinator.data
-
-        return data
+        return self.coordinator.data
 
     @property
     def device_info(self):
@@ -85,6 +79,7 @@ class AQMSensor(CoordinatorEntity, SensorEntity):
     def native_value(self):
         if self._is_valid_data():
             return self._data[self.siteid].get(self._type)
+
         if self._device_class is None:
             return "unknown"
         return 0
@@ -136,17 +131,39 @@ class AQMSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def unique_id(self):
-        sanitized_name = self._type.replace(" ", "_") if self._type else "unknown"
+        sanitized_name = self._type.replace(
+            " ", "_"
+        ) if self._type else "unknown"
         return f"{DOMAIN}_{self.siteid}_{sanitized_name}"
 
     @property
     def icon(self):
         return self._icon
 
-    def _is_valid_data(self):
-        if (
-            self._data and self.siteid in self._data
-            and self._data.get(self.siteid, {}).get(self._type, None)
-        ):
-            return True
-        return False
+    def _is_valid_data(self) -> bool:
+        """Validate the integrity of the data."""
+        if not self._data:
+            return False
+
+        if self.siteid not in self._data:
+            _LOGGER.warning(
+                f"The site ID '{self.siteid}' is not in the data: {self._data.keys()}"
+            )
+            return False
+
+        value = self._data[self.siteid].get(self._type)
+        if value is None:
+            _LOGGER.warning(
+                f"The value for '{self._type}' in siteID '{self.siteid}' is missing or None."
+            )
+            return False
+        if value == "" and self._type not in ["pollutant", "status"]:
+            _LOGGER.warning(
+                f"The value for '{self._type}' in siteID '{self.siteid}' is empy"
+            )
+            return False
+
+        _LOGGER.debug(
+            f"Valid data found for site '{self.siteid}' and type '{self._type}': {value}"
+        )
+        return True
