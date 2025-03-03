@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import RestoreSensor
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
@@ -24,16 +24,23 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
         entities = [
             AQMSensor(
-                coordinator, id, SITENAME_DICT[id], aq_type, value["dc"],
-                value["unit"], value["sc"], value["dp"], value["icon"]
-            ) for aq_type, value in SENSOR_INFO.items() for id in siteid
+                coordinator=coordinator,
+                siteid=id,
+                sitename=SITENAME_DICT[id],
+                aq_type=aq_type,
+                device_class=config["dc"],
+                unit_of_measurement=config["unit"],
+                state_class=config["sc"],
+                display_precision=config["dp"],
+                icon=config["icon"]
+            ) for id in siteid for aq_type, config in SENSOR_INFO.items()
         ]
         async_add_entities(entities)
     except Exception as e:
         _LOGGER.error(f"setup sensor error: {e}")
 
 
-class AQMSensor(CoordinatorEntity, SensorEntity):
+class AQMSensor(CoordinatorEntity, RestoreSensor):
     """Representation of a Taiwan AQM sensor."""
 
     def __init__(
@@ -58,9 +65,18 @@ class AQMSensor(CoordinatorEntity, SensorEntity):
         self._state_class = state_class
         self._display_precision = display_precision
         self._icon = icon
-        _LOGGER.debug(
-            f"Initialized TaiwanAQMEntity for siteid: {self.siteid}, type: {self._type}"
-        )
+        self._last_value = None
+        _LOGGER.debug(f"Initialized TaiwanAQMEntity for siteid: {self.siteid}, type: {self._type}")
+
+    async def async_added_to_hass(self):
+        """Get the old value"""
+        await super().async_added_to_hass()
+
+        if (last_sensor_data := await self.async_get_last_sensor_data()) \
+            and last_sensor_data.native_value is not None \
+            and self._device_class is not None:
+
+            self._last_value = last_sensor_data.native_value
 
     @property
     def _data(self):
@@ -78,11 +94,16 @@ class AQMSensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self):
         if self._is_valid_data():
-            return self._data[self.siteid].get(self._type)
-
-        if self._device_class is None:
-            return "unknown"
-        return 0
+            new_value = self._data[self.siteid].get(self._type)
+            self._last_value = new_value
+            return new_value
+        else:
+            if self._device_class is None:
+                return "unknown"
+            elif self._last_value is not None:
+                return self._last_value
+            else:
+                return 0
 
     @property
     def device_class(self):
@@ -131,9 +152,7 @@ class AQMSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def unique_id(self):
-        sanitized_name = self._type.replace(
-            " ", "_"
-        ) if self._type else "unknown"
+        sanitized_name = self._type.replace(" ", "_") if self._type else "unknown"
         return f"{DOMAIN}_{self.siteid}_{sanitized_name}"
 
     @property
@@ -143,27 +162,19 @@ class AQMSensor(CoordinatorEntity, SensorEntity):
     def _is_valid_data(self) -> bool:
         """Validate the integrity of the data."""
         if not self._data:
+            _LOGGER.error("No data available")
             return False
 
         if self.siteid not in self._data:
-            _LOGGER.warning(
-                f"The site ID '{self.siteid}' is not in the data: {self._data.keys()}"
-            )
+            _LOGGER.warning(f"The site ID '{self.siteid}' is not in the data: {self._data.keys()}")
             return False
 
-        value = self._data[self.siteid].get(self._type)
-        if value is None:
-            _LOGGER.warning(
-                f"The value for '{self._type}' in siteID '{self.siteid}' is missing or None."
-            )
-            return False
-        if value == "" and self._type not in ["pollutant", "status"]:
-            _LOGGER.warning(
-                f"The value for '{self._type}' in siteID '{self.siteid}' is empy"
-            )
+        if (value := self._data[self.siteid].get(self._type)) in [None, ""]:
+            if value is None:
+                _LOGGER.warning(f"The value for '{self._type}' in siteID '{self.siteid}' is missing or None.")
+            elif value == "" and self._type not in ["pollutant", "status"]:
+                _LOGGER.warning(f"The value for '{self._type}' in siteID '{self.siteid}' is empy")
             return False
 
-        _LOGGER.debug(
-            f"Valid data found for site '{self.siteid}' and type '{self._type}': {value}"
-        )
+        _LOGGER.debug(f"Valid data found for site '{self.siteid}' and type '{self._type}': {value}")
         return True
