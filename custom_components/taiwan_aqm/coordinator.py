@@ -6,10 +6,9 @@ import logging
 import asyncio
 import random
 
-from aiohttp import ClientError
-from aiohttp.hdrs import ACCEPT, CONTENT_TYPE, USER_AGENT
+from httpx import HTTPError, TimeoutException
 
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.httpx_client import get_async_client
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.const import CONTENT_TYPE_JSON
 
@@ -31,96 +30,92 @@ class AQMCoordinator(DataUpdateCoordinator):
         )
         self.hass = hass
         self.entry = entry
-        self.session = async_get_clientsession(hass)
+        self.client = get_async_client(hass, False)
 
     async def _async_update_data(self):
         """Fetch data from API."""
-        api_key = self.hass.data[DOMAIN][self.entry.entry_id].get(API_KEY, "")
-        id = self.hass.data[DOMAIN][self.entry.entry_id].get(SITEID, [])
-        data = await self._get_data(api_key, id)
+        api_key = self.hass.data[DOMAIN][self.entry.entry_id][API_KEY]
+        siteid = self.hass.data[DOMAIN][self.entry.entry_id][SITEID]
+        data = await self._get_data(api_key, siteid)
         if data:
             return data
         else:
-            _LOGGER.error(f"Coordinator data is empty")
             raise UpdateFailed
 
-    async def _get_data(self, api_key, id):
+    async def _get_data(self, api_key, siteid):
         """Fetch the AQI data from the API."""
 
         params = {"language": "zh", "api_key": api_key, "format": "JSON"}
         headers = {
-            ACCEPT: CONTENT_TYPE_JSON,
-            CONTENT_TYPE: CONTENT_TYPE_JSON,
-            USER_AGENT: HA_USER_AGENT,
+            "Accept": CONTENT_TYPE_JSON,
+            "Content-Type": CONTENT_TYPE_JSON,
+            "User-Agent": HA_USER_AGENT,
         }
 
-        for attempt in range(3):
+        for attempt in range(5):
             try:
-                async with self.session.get(
+                response = await self.client.get(
                     API_URL,
                     headers=headers,
                     params=params,
-                    ssl=False,
                     timeout=15
-                ) as response:
-                    if response.ok:
-                        records = await self.verify_data(response)
-
-                        if records:
-                            aq_data = {
-                                str(data["siteid"]): data
-                                for data in records
-                                if str(data["siteid"]) in id
-                            }
-                            return aq_data
-
-                        _LOGGER.warning(
-                            f"No records found in the API response. Retrying... ({attempt + 1}/3)"
-                        )
-                    else:
-                        _LOGGER.warning(
-                            f"API returned unexpected status code: {response.status}, Retrying... ({attempt + 1}/3)"
-                        )
-
-            except asyncio.TimeoutError:
-                _LOGGER.warning(
-                    f"Request timed out. Retrying... ({attempt + 1}/3)"
                 )
-            except ClientError as e:
+                
+                if response.is_success:
+                    records = await self.hass.async_add_executor_job(
+                        self.verify_data, response
+                    )
+
+                    if records:
+                        aq_data = {
+                            str(data["siteid"]): data
+                            for data in records
+                            if str(data["siteid"]) in siteid
+                        }
+                        return aq_data
+
+                    _LOGGER.warning(
+                        f"No records found in the API response. Retrying... ({attempt + 1}/5)"
+                    )
+                else:
+                    _LOGGER.warning(
+                        f"API returned unexpected status code: {response.status_code}, Retrying... ({attempt + 1}/5)"
+                    )
+
+            except TimeoutException as e:
                 _LOGGER.warning(
-                    f"HTTP client error: {e}. Retrying... ({attempt + 1}/3)"
+                    f"Request timed out: {e}. Retrying... ({attempt + 1}/5)"
+                )
+            except HTTPError as e:
+                _LOGGER.warning(
+                    f"HTTP client error: {e}. Retrying... ({attempt + 1}/5)"
                 )
             except Exception as e:
                 _LOGGER.error(
-                    f"Get data error: {e}. Retrying... ({attempt + 1}/3)"
+                    f"Get data error: {e}. Retrying... ({attempt + 1}/5)"
                 )
-            if attempt < 2:
-                await asyncio.sleep(random.uniform(1, 3))
+            if attempt < 4:
+                await asyncio.sleep(random.uniform(5, 15))
             else:
                 await self.hass.services.async_call(
                     "notify", "persistent_notification", {
-                        "message": "Failed to fetch data after 3 attempts.",
+                        "message": "Failed to fetch data after 5 attempts.",
                         "title": "Taiwan Air Quality Monitor Error"
                     }
                 )
-                _LOGGER.error(f"Failed to fetch data after 3 attempts.")
                 return None
 
-    async def verify_data(self, response):
+    def verify_data(self, response):
         """Verify the data obtained"""
 
+        raw_data = response.read()
+        raw_text = raw_data.decode("utf-8", errors="ignore")
+        _LOGGER.debug(f"Raw API Response: {raw_text}")
         try:
             # 嘗試解析完整 JSON
-            data = await response.json()
-            _LOGGER.debug(f"reponse: {data}")
-            if isinstance(data, dict) and "records" in data:
-                return data["records"]
-            return []
+            return json.loads(raw_text).get("records", [])
         except json.JSONDecodeError:
-            r_data = await response.text()
-            return await self.hass.async_add_executor_job(
-                self.extract_records, r_data
-            )
+            return self.extract_records(raw_text)
 
     def extract_records(self, data_string):
         """
@@ -133,7 +128,6 @@ class AQMCoordinator(DataUpdateCoordinator):
         list: records array contents
         """
         try:
-            _LOGGER.debug(f"reponse: {data_string}")
             pattern = r'"records"\s*:\s*\[(.*?)\]'
             match = re.search(pattern, data_string, re.DOTALL)
             if match:

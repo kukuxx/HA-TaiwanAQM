@@ -19,21 +19,21 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up Taiwan AQM sensors from a config entry."""
     try:
-        siteid = hass.data[DOMAIN][entry.entry_id].get(SITEID, [])
+        siteid = hass.data[DOMAIN][entry.entry_id].get(SITEID)
         coordinator = hass.data[DOMAIN][entry.entry_id].get(COORDINATOR)
 
         entities = [
             AQMSensor(
                 coordinator=coordinator,
-                siteid=id,
-                sitename=SITENAME_DICT[id],
+                siteid=s_id,
+                sitename=SITENAME_DICT[s_id],
                 aq_type=aq_type,
                 device_class=config["dc"],
                 unit_of_measurement=config["unit"],
                 state_class=config["sc"],
                 display_precision=config["dp"],
                 icon=config["icon"]
-            ) for id in siteid for aq_type, config in SENSOR_INFO.items()
+            ) for s_id in siteid for aq_type, config in SENSOR_INFO.items()
         ]
         async_add_entities(entities)
     except Exception as e:
@@ -87,23 +87,17 @@ class AQMSensor(CoordinatorEntity, RestoreSensor):
         return {
             "identifiers": {(DOMAIN, self.siteid)},
             "name": f"TWAQ Monitor - {self._sitename}({self.siteid})",
-            "manufacturer": "台灣環境部環境資料開放平台",
+            "manufacturer": "Taiwan Ministry of Environment Data Open Platform",
             "model": "TaiwanAQM",
         }
 
     @property
     def native_value(self):
-        if self._is_valid_data():
-            new_value = self._data[self.siteid].get(self._type)
-            self._last_value = new_value
-            return new_value
+        if self._is_valid_data() and self.coordinator.last_update_success:
+            self._last_value = self._data[self.siteid].get(self._type)
+            return self._last_value
         else:
-            if self._device_class is None:
-                return "unknown"
-            elif self._last_value is not None:
-                return self._last_value
-            else:
-                return 0
+            return "unknown" if self._device_class is None else 0
 
     @property
     def device_class(self):
@@ -139,7 +133,7 @@ class AQMSensor(CoordinatorEntity, RestoreSensor):
 
     @property
     def available(self):
-        return self.coordinator.last_update_success and self.siteid in self._data
+        return self.siteid in self._data
 
     @property
     def name(self):
@@ -171,9 +165,9 @@ class AQMSensor(CoordinatorEntity, RestoreSensor):
 
         if (value := self._data[self.siteid].get(self._type)) in [None, ""]:
             if value is None:
-                _LOGGER.warning(f"The value for '{self._type}' in siteID '{self.siteid}' is missing or None.")
-            elif value == "" and self._type not in ["pollutant", "status"]:
-                _LOGGER.warning(f"The value for '{self._type}' in siteID '{self.siteid}' is empy")
+                _LOGGER.debug(f"The value for '{self._type}' in siteID '{self.siteid}' is missing or None.")
+            elif value == "":
+                _LOGGER.debug(f"The value for '{self._type}' in siteID '{self.siteid}' is empy")
             return False
 
         _LOGGER.debug(f"Valid data found for site '{self.siteid}' and type '{self._type}': {value}")

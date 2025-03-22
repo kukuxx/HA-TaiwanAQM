@@ -41,15 +41,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         async def refresh_task(*args):
             await coordinator.async_refresh()
-            _LOGGER.info(
+            _LOGGER.debug(
                 f"Refresh Success at: {args[0].strftime('%Y-%m-%d %H:%M:%S %Z')}"
             )
 
         task = async_track_time_change(hass, refresh_task, minute=10, second=0)
         hass.data[DOMAIN][entry.entry_id] = {
             COORDINATOR: coordinator,
-            API_KEY: entry.data.get(CONF_API_KEY, ""),
-            SITEID: entry.data.get(CONF_SITEID, []),
+            API_KEY: entry.data.get(CONF_API_KEY),
+            SITEID: entry.data.get(CONF_SITEID),
             TASK: task,
         }
         await coordinator.async_config_entry_first_refresh()
@@ -60,7 +60,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         return True
     except Exception as e:
-        _LOGGER.error(f"async_setup_entry error {e}")
+        _LOGGER.error(f"async_setup_entry error: {e}")
         return False
 
 
@@ -69,7 +69,7 @@ async def update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     try:
         await hass.config_entries.async_reload(entry.entry_id)
     except Exception as e:
-        _LOGGER.error(f"update_listener error {e}")
+        _LOGGER.error(f"update_listener error: {e}")
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -88,7 +88,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 (DOMAIN, id)
                 for id in old_siteid if id not in new_siteid
             }
-            _LOGGER.info(f"remove dev_identifiers: {del_dev_identifiers}")
+            _LOGGER.debug(f"remove dev_identifiers: {del_dev_identifiers}")
             if del_dev_identifiers:
                 dev_reg = dr.async_get(hass)
                 devices = [
@@ -98,7 +98,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 ]
                 for dev in devices:
                     dev_reg.async_remove_device(dev.id)
-                    _LOGGER.info(f"removed device: {dev.id}")
+                    _LOGGER.debug(f"removed device: {dev.id}")
 
             hass.data[DOMAIN].pop(entry.entry_id)
             if DOMAIN in hass.data and not hass.data[DOMAIN]:
@@ -108,7 +108,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         else:
             return False
     except Exception as e:
-        _LOGGER.error(f"async_unload_entry error {e}")
+        _LOGGER.error(f"async_unload_entry error: {e}")
         return False
 
 
