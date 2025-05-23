@@ -22,6 +22,7 @@
         "step": {
             "init": {
                 "title": "\u914d\u7f6e TWAQ Monitor",
+                "description": "\u5982\u679c\u767c\u73fe\u6e2c\u7ad9\u932f\u8aa4\u8acb\u5230 https://github.com/kukuxx/HA-TaiwanAQM/issues \u56de\u5831.",
                 "data": {
                     "api_key": "\u8f38\u5165\u4f60\u7684 API Key",
                     "siteID": "\u9078\u64c7\u6e2c\u7ad9(\u8907\u9078)"

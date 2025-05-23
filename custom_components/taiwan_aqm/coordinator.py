@@ -10,7 +10,7 @@ from io import StringIO
 from homeassistant.helpers.httpx_client import get_async_client
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN, API_URL, API_KEY, SITEID, HA_USER_AGENT
+from .const import DOMAIN, API_URL, CONF_API_KEY, CONF_SITEID, HA_USER_AGENT
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -27,8 +27,8 @@ class AQMCoordinator(DataUpdateCoordinator):
             update_interval=interval,
         )
         self.hass = hass
-        self.api_key = self.hass.data[DOMAIN][entry.entry_id][API_KEY]
-        self.siteid = self.hass.data[DOMAIN][entry.entry_id][SITEID]
+        self.api_key = entry.data.get(CONF_API_KEY)
+        self.siteid = entry.data.get(CONF_SITEID)
         self.client = get_async_client(hass, False)
 
     async def _async_update_data(self):

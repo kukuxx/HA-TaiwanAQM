@@ -13,10 +13,8 @@ from homeassistant.helpers.event import async_track_time_change
 from .coordinator import AQMCoordinator
 from .const import (
     DOMAIN,
-    CONF_API_KEY,
     CONF_SITEID,
     COORDINATOR,
-    API_KEY,
     SITEID,
     TASK,
     PLATFORM,
@@ -47,7 +45,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         task = async_track_time_change(hass, refresh_task, minute=10, second=0)
         hass.data[DOMAIN][entry.entry_id] = {
             COORDINATOR: coordinator,
-            API_KEY: entry.data.get(CONF_API_KEY),
             SITEID: entry.data.get(CONF_SITEID),
             TASK: task,
         }

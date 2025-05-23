@@ -9,7 +9,7 @@ from .const import (
     DOMAIN,
     SITENAME_DICT,
     SENSOR_INFO,
-    SITEID,
+    CONF_SITEID,
     COORDINATOR,
 )
 
@@ -19,7 +19,7 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up Taiwan AQM sensors from a config entry."""
     try:
-        siteid = hass.data[DOMAIN][entry.entry_id].get(SITEID)
+        siteid = entry.data.get(CONF_SITEID)
         coordinator = hass.data[DOMAIN][entry.entry_id].get(COORDINATOR)
 
         entities = [
