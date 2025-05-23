@@ -3,6 +3,7 @@
         "step": {
             "user": {
                 "title": "Configure TWAQ Monitor",
+                "description": "If you find an error with the site, please report it https://github.com/kukuxx/HA-TaiwanAQM/issues.",
                 "data": {
                     "api_key": "Enter your API Key",
                     "siteID": "Select Site(Multiple Selection)"

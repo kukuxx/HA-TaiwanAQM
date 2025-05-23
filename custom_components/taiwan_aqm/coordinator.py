@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-import re
-import json
+import csv
 import logging
 import asyncio
 import random
 
-from httpx import HTTPError, TimeoutException
+from io import StringIO
 
 from homeassistant.helpers.httpx_client import get_async_client
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from homeassistant.const import CONTENT_TYPE_JSON
 
 from .const import DOMAIN, API_URL, API_KEY, SITEID, HA_USER_AGENT
 
@@ -29,26 +27,27 @@ class AQMCoordinator(DataUpdateCoordinator):
             update_interval=interval,
         )
         self.hass = hass
-        self.entry = entry
+        self.api_key = self.hass.data[DOMAIN][entry.entry_id][API_KEY]
+        self.siteid = self.hass.data[DOMAIN][entry.entry_id][SITEID]
         self.client = get_async_client(hass, False)
 
     async def _async_update_data(self):
         """Fetch data from API."""
-        api_key = self.hass.data[DOMAIN][self.entry.entry_id][API_KEY]
-        siteid = self.hass.data[DOMAIN][self.entry.entry_id][SITEID]
-        data = await self._get_data(api_key, siteid)
-        if data:
-            return data
-        else:
-            raise UpdateFailed
+        try:
+            data = await self._get_data()
+            if data:
+                return data
+            else:
+                raise UpdateFailed("No data received from API")
+        except Exception as e:
+            raise UpdateFailed(f"Unexpected error during data update: {e}")
 
-    async def _get_data(self, api_key, siteid):
+    async def _get_data(self):
         """Fetch the AQI data from the API."""
 
-        params = {"language": "zh", "api_key": api_key, "format": "JSON"}
+        params = {"language": "zh", "api_key": self.api_key, "format": "CSV"}
         headers = {
-            "Accept": CONTENT_TYPE_JSON,
-            "Content-Type": CONTENT_TYPE_JSON,
+            "Accept": "text/csv",
             "User-Agent": HA_USER_AGENT,
         }
 
@@ -63,16 +62,20 @@ class AQMCoordinator(DataUpdateCoordinator):
                 
                 if response.is_success:
                     records = await self.hass.async_add_executor_job(
-                        self.verify_data, response
+                        self._parse_csv_response, response
                     )
 
                     if records:
                         aq_data = {
-                            str(data["siteid"]): data
+                            site_id: data
                             for data in records
-                            if str(data["siteid"]) in siteid
+                            if (site_id := str(data.get("siteid"))) in self.siteid
                         }
-                        return aq_data
+                        if aq_data:
+                            _LOGGER.debug(f"Successfully fetched data for {len(aq_data)} sites")
+                            return aq_data
+                        else:
+                            _LOGGER.warning("No matching site data found in records")
 
                     _LOGGER.warning(
                         f"No records found in the API response. Retrying... ({attempt + 1}/5)"
@@ -82,66 +85,62 @@ class AQMCoordinator(DataUpdateCoordinator):
                         f"API returned unexpected status code: {response.status_code}, Retrying... ({attempt + 1}/5)"
                     )
 
-            except TimeoutException as e:
+            except asyncio.TimeoutError as e:
                 _LOGGER.warning(
                     f"Request timed out: {e}. Retrying... ({attempt + 1}/5)"
                 )
-            except HTTPError as e:
-                _LOGGER.warning(
-                    f"HTTP client error: {e}. Retrying... ({attempt + 1}/5)"
-                )
             except Exception as e:
-                _LOGGER.error(
-                    f"Get data error: {e}. Retrying... ({attempt + 1}/5)"
+                _LOGGER.warning(
+                    f"Request failed: {e}. Retrying... ({attempt + 1}/5)"
                 )
+            
             if attempt < 4:
                 await asyncio.sleep(random.uniform(5, 15))
-            else:
-                await self.hass.services.async_call(
-                    "notify", "persistent_notification", {
-                        "message": "Failed to fetch data after 5 attempts.",
-                        "title": "Taiwan Air Quality Monitor Error"
-                    }
-                )
-                return None
-
-    def verify_data(self, response):
-        """Verify the data obtained"""
-
-        raw_data = response.read()
-        raw_text = raw_data.decode("utf-8", errors="ignore")
-        _LOGGER.debug(f"Raw API Response: {raw_text}")
-        try:
-            # 嘗試解析完整 JSON
-            return json.loads(raw_text).get("records", [])
-        except json.JSONDecodeError:
-            return self.extract_records(raw_text)
-
-    def extract_records(self, data_string):
-        """
-        Extract only the records portion from a string
-
-        parameter:
-        data_string (str): the original string
         
-        Return:
-        list: records array contents
-        """
+        await self.hass.services.async_call(
+            "notify", "persistent_notification", {
+                "message": "Failed to fetch data after 5 attempts.",
+                "title": "Taiwan Air Quality Monitor Error"
+            }
+        )
+        return None
+
+    def _parse_csv_response(self, response):
+        """Parse CSV response content and return list of record dicts."""
         try:
-            pattern = r'"records"\s*:\s*\[(.*?)\]'
-            match = re.search(pattern, data_string, re.DOTALL)
-            if match:
-                records_content = '[' + match.group(1) + ']'
-                return json.loads(records_content)
-
+            if hasattr(response, 'text'):
+                raw_text = response.text
             else:
-                _LOGGER.warning(
-                    f"Parse failed, no match records found, reponse: {data_string}"
-                )
-
-        except (json.JSONDecodeError, AttributeError) as e:
-            _LOGGER.warning(
-                f"Failed to parse records: {e}, reponse: {data_string}"
-            )
-
-        return []
+                raw_data = response.read()
+                # 嘗試不同的編碼方式
+                for encoding in ['utf-8', 'big5', 'gb2312']:
+                    try:
+                        raw_text = raw_data.decode(encoding)
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                else:
+                    # 如果所有編碼都失敗，使用 utf-8 並替換錯誤字符
+                    raw_text = raw_data.decode("utf-8", errors="replace")
+                    _LOGGER.warning("Used fallback encoding with character replacement")
+            
+            _LOGGER.debug(f"Raw CSV API Response length: {len(raw_text)} characters")
+            
+            # 檢查是否為空響應
+            if not raw_text.strip():
+                _LOGGER.warning("Received empty CSV response")
+                return []
+            
+            csv_reader = csv.DictReader(StringIO(raw_text))
+            records = list(csv_reader)
+            
+            _LOGGER.debug(f"Parsed {len(records)} records from CSV")
+            
+            return records
+            
+        except csv.Error as e:
+            _LOGGER.error(f"CSV parsing error: {e}")
+            return []
+        except Exception as e:
+            _LOGGER.error(f"Unexpected error parsing CSV data: {e}")
+            return []
