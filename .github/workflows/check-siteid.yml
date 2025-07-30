@@ -1,0 +1,79 @@
+name: Check SiteId Changes
+
+on:
+  schedule:
+    - cron: '0 */12 * * *'  # Runs every 12 hours (UTC)
+  workflow_dispatch:
+
+jobs:
+  check-siteids:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install GitHub CLI
+        run: sudo apt-get install gh -y
+
+      - name: Compare SiteIds and create Issue if changed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: | 
+          API_DATA=$(curl -s "https://data.moenv.gov.tw/api/v2/aqx_p_432?api_key=221974dd-667c-4243-b308-61b60bc29986&limit=1000&sort=ImportDate%20desc&format=JSON")
+
+          API_ENTRIES=$(echo "$API_DATA" | jq -r '.records[] | "\(.siteid)|\(.sitename)|\(.county)"' | sort -u)
+
+          EXPECTED_ENTRIES=$(jq -r '.[] | "\(.siteid)|\(.sitename)|\(.county)"' .github/workflows/expected_sites.json | sort -u)
+
+          NEW_ENTRIES=$(comm -13 <(echo "$EXPECTED_ENTRIES") <(echo "$API_ENTRIES"))
+          REMOVED_ENTRIES=$(comm -23 <(echo "$EXPECTED_ENTRIES") <(echo "$API_ENTRIES"))
+
+          if [ -n "$NEW_ENTRIES" ] || [ -n "$REMOVED_ENTRIES" ]; then
+            echo "🔄 Changes in Site list detected."
+
+            BODY="🚨 Changes detected in Site list:"
+
+            if [ -n "$NEW_ENTRIES" ]; then
+              BODY+="\n\n### 🆕 New Sites:"
+              while read -r ENTRY; do
+                ID=$(echo "$ENTRY" | cut -d'|' -f1)
+                NAME=$(echo "$ENTRY" | cut -d'|' -f2)
+                COUNTY=$(echo "$ENTRY" | cut -d'|' -f3)
+                BODY+="\n- $ID：$NAME（$COUNTY）"
+              done <<< "$NEW_ENTRIES"
+            fi
+
+            if [ -n "$REMOVED_ENTRIES" ]; then
+              BODY+="\n\n### ❌ Removed Sites:"
+              while read -r ENTRY; do
+                ID=$(echo "$ENTRY" | cut -d'|' -f1)
+                NAME=$(echo "$ENTRY" | cut -d'|' -f2)
+                COUNTY=$(echo "$ENTRY" | cut -d'|' -f3)
+                BODY+="\n- $ID：$NAME（$COUNTY）"
+              done <<< "$REMOVED_ENTRIES"
+            fi
+
+            EXISTING_ISSUE=$(gh issue list \
+              --state open \
+              --label "site change" \
+              --json number \
+              --jq '.[0].number')
+
+            if [ -n "$EXISTING_ISSUE" ]; then
+              echo "✏️ Found existing issue with 'site change' label: #$EXISTING_ISSUE"
+              gh issue edit "$EXISTING_ISSUE" --body "$(echo -e "$BODY")"
+            else
+              echo "🆕 No existing issue with 'site change' label, creating new one..."
+              gh issue create \
+                --title "Site change" \
+                --body "$(echo -e "$BODY")" \
+                --label "site change"
+            fi
+          else
+            echo "✅ No changes detected."
+          fi
+
+
+
+
