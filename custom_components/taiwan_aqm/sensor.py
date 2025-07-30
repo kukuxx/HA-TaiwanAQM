@@ -33,7 +33,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
                 state_class=config["sc"],
                 display_precision=config["dp"],
                 icon=config["icon"]
-            ) for s_id in siteid for aq_type, config in SENSOR_INFO.items()
+            ) for s_id in siteid 
+            for aq_type, config in SENSOR_INFO.items()
         ]
         async_add_entities(entities)
     except Exception as e:
@@ -137,8 +138,8 @@ class AQMSensor(CoordinatorEntity, RestoreSensor):
 
     @property
     def name(self):
-        _entity_name = f"TWAQM-{self._sitename}_{self._type}"
-        return _entity_name
+        _type = self._type.replace("_", " ") if self._type else "unknown"
+        return f"{self._sitename} {_type}"
 
     @property
     def has_entity_name(self):
