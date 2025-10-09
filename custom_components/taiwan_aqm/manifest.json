@@ -4,11 +4,13 @@
   ],
   "domain": "taiwan_aqm",
   "name": "Taiwan Air Quality Monitor",
-  "version": "1.1.7",
+  "version": "2.0.0",
   "homeassistant": "2025.1.0",
   "documentation": "https://github.com/kukuxx/HA-TaiwanAQM",
   "issue_tracker": "https://github.com/kukuxx/HA-TaiwanAQM/issues",
-  "requirements": [],
+  "requirements": [
+    "httpx"
+  ],
   "dependencies": [],
   "integration_type": "hub",
   "loggers": [

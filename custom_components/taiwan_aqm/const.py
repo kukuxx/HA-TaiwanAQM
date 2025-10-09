@@ -1,16 +1,29 @@
-from datetime import timedelta
-from homeassistant.const import Platform
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
+from homeassistant.const import Platform
 
 DOMAIN = "taiwan_aqm"
 CONF_API_KEY = "api_key"
 CONF_SITEID = "siteID"
-COORDINATOR = "COORDINATOR"
-SITEID = "SITEID"
-TASK = "TIMER_TASK"
+CONF_STATION_ID = "station_id"
+CONF_THING_ID = "thing_id"
+SITE_COORDINATOR = "SITE_COORDINATOR"
+MICRO_COORDINATORS = "MICRO_COORDINATORS"
+MICRO_SENSOR_IDS = "MICRO_SENSOR_IDS"
+SITE_UPDATE_TASK = "SITE_UPDATE_TASK"
+
 API_URL = "https://data.moenv.gov.tw/api/v2/aqx_p_432"
-HA_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HomeAssistant/HA-TaiwanAQM"
-UPDATE_INTERVAL = timedelta(minutes=11)
+MICRO_API_BASE_URL = "https://sta.colife.org.tw/STA_AirQuality_EPAIoT/v1.0"
+MICRO_ID_API_URL = (
+    f"{MICRO_API_BASE_URL}/Things?$filter=name eq '智慧城鄉空品微型感測器-{{}}'"
+)
+MICRO_DATA_API_URL = (
+    f"{MICRO_API_BASE_URL}/Things({{}})?$expand=Datastreams"
+    "($expand=Observations($orderby=phenomenonTime desc;$top=1))"
+)
+HA_USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) HomeAssistant/HA-TaiwanAQM"
+)
 PLATFORM = [Platform.SENSOR]
 
 SITEID_DICT = {
@@ -51,7 +64,7 @@ SITEID_DICT = {
     "臺中市大里": "30",
     "臺中市忠明": "31",
     "臺中市西屯": "32",
-    "臺中市和平區消防隊": "310",
+    "臺中市和平": "310",
     "彰化縣彰化": "33",
     "彰化縣線西": "34",
     "彰化縣二林": "35",
@@ -106,122 +119,150 @@ SITENAME_DICT = {v: k for k, v in SITEID_DICT.items()}
 
 SENSOR_INFO = {
     "aqi": {
-        "dc": SensorDeviceClass.AQI,
+        "device_class": SensorDeviceClass.AQI,
         "unit": None,
-        "sc": SensorStateClass.MEASUREMENT,
-        "dp": 2,
-        "icon": None,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "display_precision": 2,
+        "icon": "mdi:air-filter",
     },
     "pollutant": {
-        "dc": None,
+        "device_class": None,
         "unit": None,
-        "sc": None,
-        "dp": None,
+        "state_class": None,
+        "display_precision": None,
         "icon": "mdi:smog",
     },
     "status": {
-        "dc": None,
+        "device_class": None,
         "unit": None,
-        "sc": None,
-        "dp": None,
+        "state_class": None,
+        "display_precision": None,
         "icon": "mdi:nature-people-outline",
     },
     "publishtime": {
-        "dc": None,
+        "device_class": None,
         "unit": None,
-        "sc": None,
-        "dp": None,
+        "state_class": None,
+        "display_precision": None,
         "icon": "mdi:update",
     },
     "so2": {
-        "dc": SensorDeviceClass.VOLATILE_ORGANIC_COMPOUNDS_PARTS,
+        "device_class": SensorDeviceClass.VOLATILE_ORGANIC_COMPOUNDS_PARTS,
         "unit": "ppb",
-        "sc": SensorStateClass.MEASUREMENT,
-        "dp": 2,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "display_precision": 2,
         "icon": "mdi:molecule",
     },
     "so2_avg": {
-        "dc": SensorDeviceClass.VOLATILE_ORGANIC_COMPOUNDS_PARTS,
+        "device_class": SensorDeviceClass.VOLATILE_ORGANIC_COMPOUNDS_PARTS,
         "unit": "ppb",
-        "sc": SensorStateClass.MEASUREMENT,
-        "dp": 2,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "display_precision": 2,
         "icon": "mdi:molecule",
     },
     "co": {
-        "dc": SensorDeviceClass.CO,
+        "device_class": SensorDeviceClass.CO,
         "unit": "ppm",
-        "sc": SensorStateClass.MEASUREMENT,
-        "dp": 2,
-        "icon": None,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "display_precision": 2,
+        "icon": "mdi:molecule-co",
     },
     "co_8hr": {
-        "dc": SensorDeviceClass.CO,
+        "device_class": SensorDeviceClass.CO,
         "unit": "ppm",
-        "sc": SensorStateClass.MEASUREMENT,
-        "dp": 2,
-        "icon": None,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "display_precision": 2,
+        "icon": "mdi:molecule-co",
     },
     "o3": {
-        "dc": SensorDeviceClass.VOLATILE_ORGANIC_COMPOUNDS_PARTS,
+        "device_class": SensorDeviceClass.VOLATILE_ORGANIC_COMPOUNDS_PARTS,
         "unit": "ppb",
-        "sc": SensorStateClass.MEASUREMENT,
-        "dp": 2,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "display_precision": 2,
         "icon": "mdi:molecule",
     },
     "o3_8hr": {
-        "dc": SensorDeviceClass.VOLATILE_ORGANIC_COMPOUNDS_PARTS,
+        "device_class": SensorDeviceClass.VOLATILE_ORGANIC_COMPOUNDS_PARTS,
         "unit": "ppb",
-        "sc": SensorStateClass.MEASUREMENT,
-        "dp": 2,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "display_precision": 2,
         "icon": "mdi:molecule",
     },
     "no2": {
-        "dc": SensorDeviceClass.VOLATILE_ORGANIC_COMPOUNDS_PARTS,
+        "device_class": SensorDeviceClass.VOLATILE_ORGANIC_COMPOUNDS_PARTS,
         "unit": "ppb",
-        "sc": SensorStateClass.MEASUREMENT,
-        "dp": 2,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "display_precision": 2,
         "icon": "mdi:molecule",
     },
     "nox": {
-        "dc": SensorDeviceClass.VOLATILE_ORGANIC_COMPOUNDS_PARTS,
+        "device_class": SensorDeviceClass.VOLATILE_ORGANIC_COMPOUNDS_PARTS,
         "unit": "ppb",
-        "sc": SensorStateClass.MEASUREMENT,
-        "dp": 2,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "display_precision": 2,
         "icon": "mdi:molecule",
     },
     "no": {
-        "dc": SensorDeviceClass.VOLATILE_ORGANIC_COMPOUNDS_PARTS,
+        "device_class": SensorDeviceClass.VOLATILE_ORGANIC_COMPOUNDS_PARTS,
         "unit": "ppb",
-        "sc": SensorStateClass.MEASUREMENT,
-        "dp": 2,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "display_precision": 2,
         "icon": "mdi:molecule",
     },
     "pm10": {
-        "dc": SensorDeviceClass.PM10,
+        "device_class": SensorDeviceClass.PM10,
         "unit": "µg/m³",
-        "sc": SensorStateClass.MEASUREMENT,
-        "dp": 2,
-        "icon": None,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "display_precision": 2,
+        "icon": "mdi:molecule",
     },
     "pm10_avg": {
-        "dc": SensorDeviceClass.PM10,
+        "device_class": SensorDeviceClass.PM10,
         "unit": "µg/m³",
-        "sc": SensorStateClass.MEASUREMENT,
-        "dp": 2,
-        "icon": None,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "display_precision": 2,
+        "icon": "mdi:molecule",
     },
     "pm2.5": {
-        "dc": SensorDeviceClass.PM25,
+        "device_class": SensorDeviceClass.PM25,
         "unit": "µg/m³",
-        "sc": SensorStateClass.MEASUREMENT,
-        "dp": 2,
-        "icon": None,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "display_precision": 2,
+        "icon": "mdi:molecule",
     },
     "pm2.5_avg": {
-        "dc": SensorDeviceClass.PM25,
+        "device_class": SensorDeviceClass.PM25,
         "unit": "µg/m³",
-        "sc": SensorStateClass.MEASUREMENT,
-        "dp": 2,
-        "icon": None,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "display_precision": 2,
+        "icon": "mdi:molecule",
+    },
+    "wind_speed": {
+        "device_class": SensorDeviceClass.WIND_SPEED,
+        "unit": "m/s",
+        "state_class": SensorStateClass.MEASUREMENT,
+        "display_precision": 2,
+        "icon": "mdi:weather-windy",
+    },
+    "wind_direc": {
+        "device_class": SensorDeviceClass.WIND_DIRECTION,
+        "unit": "°",
+        "state_class": None,
+        "display_precision": 2,
+        "icon": "mdi:compass",
+    },
+    "humidity": {
+        "device_class": SensorDeviceClass.HUMIDITY,
+        "unit": "%",
+        "state_class": SensorStateClass.MEASUREMENT,
+        "display_precision": 2,
+        "icon": "mdi:water-percent",
+    },
+    "temperature": {
+        "device_class": SensorDeviceClass.TEMPERATURE,
+        "unit": "°C",
+        "state_class": SensorStateClass.MEASUREMENT,
+        "display_precision": 2,
+        "icon": "mdi:thermometer",
     },
 }

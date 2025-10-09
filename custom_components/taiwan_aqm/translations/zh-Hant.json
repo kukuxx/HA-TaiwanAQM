@@ -2,36 +2,82 @@
     "config": {
         "step": {
             "user": {
-                "title": "\u914d\u7f6e TWAQ Monitor",
-                "description": "\u5982\u679c\u767c\u73fe\u6e2c\u7ad9\u932f\u8aa4\u8acb\u5230 https://github.com/kukuxx/HA-TaiwanAQM/issues \u56de\u5831.",
+                "title": "配置 TWAQ Monitor",
+                "description": "請輸入您的 API Key 以開始使用台灣空氣品質監測整合。",
                 "data": {
-                    "api_key": "\u8f38\u5165\u4f60\u7684 API Key",
-                    "siteID": "\u9078\u64c7\u6e2c\u7ad9(\u8907\u9078)"
+                    "api_key": "輸入你的 API Key"
+                }
+            },
+            "reauth_confirm": {
+                "title": "重新授權",
+                "description": "您的 API Key 已過期或無效。請輸入新的 API Key。",
+                "data": {
+                    "api_key": "輸入你的 API Key"
                 }
             }
         },
         "abort": {
-            "single_instance_allowed": "\u53ea\u5141\u8a31\u55ae\u4e00\u914d\u7f6e"
+            "single_instance_allowed": "只允許單一配置"
         },
         "error": {
-            "no_api": "\u8acb\u8f38\u5165\u4f60\u7684API KEY!",
-            "no_id": "\u81f3\u5c11\u9078\u64c7\u4e00\u500b\u6e2c\u7ad9"
+            "no_api": "請輸入你的API KEY!"
         }
     },
-    "options": {
-        "step": {
-            "init": {
-                "title": "\u914d\u7f6e TWAQ Monitor",
-                "description": "\u5982\u679c\u767c\u73fe\u6e2c\u7ad9\u932f\u8aa4\u8acb\u5230 https://github.com/kukuxx/HA-TaiwanAQM/issues \u56de\u5831.",
-                "data": {
-                    "api_key": "\u8f38\u5165\u4f60\u7684 API Key",
-                    "siteID": "\u9078\u64c7\u6e2c\u7ad9(\u8907\u9078)"
+    "config_subentries": {
+        "site": {
+            "initiate_flow": {
+                "user": "新增監測站點",
+                "reconfigure": "重新配置監測站點"
+            },
+            "entry_type": "監測站點",
+            "step": {
+                "site": {
+                    "description": "選擇要監測的空氣品質站點。如果發現測站錯誤請到 https://github.com/kukuxx/HA-TaiwanAQM/issues 回報。",
+                    "data": {
+                        "siteID": "選擇測站"
+                    }
+                },
+                "reconfigure": {
+                    "description": "修改現有的空氣品質監測站點。",
+                    "data": {
+                        "siteID": "選擇測站"
+                    }
                 }
-            }
+            },
+            "error": {
+                "no_id": "請選擇一個測站",
+                "site_already_configured": "此測站已經配置過了"
+            },
+            "abort": {}
         },
-        "error": {
-            "no_api": "\u8acb\u8f38\u5165\u4f60\u7684API KEY!",
-            "no_id": "\u81f3\u5c11\u9078\u64c7\u4e00\u500b\u6e2c\u7ad9"
+        "micro_sensor": {
+            "initiate_flow": {
+                "user": "新增空品微型感測器",
+                "reconfigure": "重新配置空品微型感測器"
+            },
+            "entry_type": "智慧城鄉空品微型感測器",
+            "step": {
+                "micro_sensor": {
+                    "description": "請到 https://wot.moenv.gov.tw 查詢感測器ID並輸入。例如:7480451814",
+                    "data": {
+                        "station_id": "Station ID"
+                    }
+                },
+                "reconfigure": {
+                    "description": "修改現有的空品微型感測器 Station ID。",
+                    "data": {
+                        "station_id": "Station ID"
+                    }
+                }
+            },
+            "error": {
+                "no_station_id": "請輸入 Station ID",
+                "station_not_found": "找不到此 Station ID 的感測器",
+                "cannot_connect": "無法連接到 API",
+                "unknown": "未知錯誤",
+                "micro_sensor_already_configured": "此微型感測器已經配置過了"
+            },
+            "abort": {}
         }
     }
 }

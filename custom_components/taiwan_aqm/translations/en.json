@@ -3,35 +3,81 @@
         "step": {
             "user": {
                 "title": "Configure TWAQ Monitor",
-                "description": "If you find an error with the site, please report it https://github.com/kukuxx/HA-TaiwanAQM/issues.",
+                "description": "Enter your API Key to start using Taiwan Air Quality Monitor integration.",
                 "data": {
-                    "api_key": "Enter your API Key",
-                    "siteID": "Select Site(Multiple Selection)"
+                    "api_key": "Enter your API Key"
+                }
+            },
+            "reauth_confirm": {
+                "title": "Reauthorization Required",
+                "description": "Your API Key is either expired or invalid. Please enter a new API Key.",
+                "data": {
+                    "api_key": "Enter your API Key"
                 }
             }
         },
         "abort": {
-            "single_instance_allowed": "Only a single configuration of Voice Recorder is allowed."
+            "single_instance_allowed": "Only a single configuration is allowed."
         },
         "error": {
-            "no_api": "Please enter your API KEY!",
-            "no_id": "Please select at least one site"
+            "no_api": "Please enter your API KEY!"
         }
     },
-    "options": {
-        "step": {
-            "init": {
-                "title": "Configure TWAQ Monitor",
-                "description": "If you find an error with the site, please report it https://github.com/kukuxx/HA-TaiwanAQM/issues.",
-                "data": {
-                    "api_key": "Enter your API Key",
-                    "siteID": "Select Site(Multiple Selection)"
+    "config_subentries": {
+        "site": {
+            "initiate_flow": {
+                "user": "Add monitoring site",
+                "reconfigure": "Reconfigure monitoring site"
+            },
+            "entry_type": "Monitoring site",
+            "step": {
+                "site": {
+                    "description": "Select an air quality monitoring site. If you find an error with the site, please report it at https://github.com/kukuxx/HA-TaiwanAQM/issues.",
+                    "data": {
+                        "siteID": "Select Site"
+                    }
+                },
+                "reconfigure": {
+                    "description": "Modify an existing air quality monitoring site.",
+                    "data": {
+                        "siteID": "Select Site"
+                    }
                 }
-            }
+            },
+            "error": {
+                "no_id": "Please select a site",
+                "site_already_configured": "This site is already configured"
+            },
+            "abort": {}
         },
-        "error": {
-            "no_api": "Please enter your API KEY!",
-            "no_id": "Please select at least one site"
+        "micro_sensor": {
+            "initiate_flow": {
+                "user": "Add air quality micro sensor",
+                "reconfigure": "Reconfigure air quality micro sensor"
+            },
+            "entry_type": "Air quality micro sensor",
+            "step": {
+                "micro_sensor": {
+                    "description": "Please go to https://wot.moenv.gov.tw to find the sensor ID and enter it. For example: 7480451814",
+                    "data": {
+                        "station_id": "Station ID"
+                    }
+                },
+                "reconfigure": {
+                    "description": "Modify the Station ID of an existing Air Quality Micro Sensor.",
+                    "data": {
+                        "station_id": "Station ID"
+                    }
+                }
+            },
+            "error": {
+                "no_station_id": "Please enter a Station ID",
+                "station_not_found": "Sensor with this Station ID not found",
+                "cannot_connect": "Cannot connect to API",
+                "unknown": "Unknown error",
+                "micro_sensor_already_configured": "This micro sensor is already configured"
+            },
+            "abort": {}
         }
     }
 }
