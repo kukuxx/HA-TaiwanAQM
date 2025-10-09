@@ -3,5 +3,5 @@
     "render_readme": true,
     "documentation": "https://github.com/kukuxx/HA-TaiwanAQM",
     "issue_tracker": "https://github.com/kukuxx/HA-TaiwanAQM/issues",
-    "homeassistant": "2025.1.0"
+    "homeassistant": "2025.9.0"
 }
