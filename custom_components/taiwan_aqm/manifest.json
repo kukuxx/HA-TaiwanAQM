@@ -4,7 +4,7 @@
   ],
   "domain": "taiwan_aqm",
   "name": "Taiwan Air Quality Monitor",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "homeassistant": "2025.9.0",
   "documentation": "https://github.com/kukuxx/HA-TaiwanAQM",
   "issue_tracker": "https://github.com/kukuxx/HA-TaiwanAQM/issues",
