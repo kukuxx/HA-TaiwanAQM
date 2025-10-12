@@ -205,7 +205,7 @@ class AQMbaseSensor(CoordinatorEntity, RestoreSensor):
         if self._is_valid_data() and self.coordinator.last_update_success:
             return self._get_value
         else:
-            return "unknown" if self._state_class is None else 0
+            return "unknown" if self._device_class is None else 0
 
     def _is_valid_data(self) -> bool:
         """Validate the integrity of the data."""

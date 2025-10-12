@@ -2,6 +2,15 @@
 
 class TaiwanAQMError(Exception):
     """Base exception for Taiwan AQM errors"""
+    def __init__(self, detail: dict = None):
+        super().__init__(detail)
+        self.detail = detail or {}
+
+    def __getitem__(self, key):
+        return self.detail.get(key)
+
+    def __str__(self):
+        return f"{self.__class__.__name__}({self.detail})"
 
 
 class ApiAuthError(TaiwanAQMError):

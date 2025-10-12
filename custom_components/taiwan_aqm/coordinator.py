@@ -127,7 +127,7 @@ class baseCoordinator(DataUpdateCoordinator, ABC):
     async def _async_update_data(self):
         """Fetch data from API."""
         try:
-            data = await self._get_data()
+            data = await self._get_data_with_retry()
             if data:
                 return data
             else:
@@ -136,9 +136,13 @@ class baseCoordinator(DataUpdateCoordinator, ABC):
             raise ConfigEntryAuthFailed("API key expired or invalid")
         except Exception as e:
             raise UpdateFailed(f"Unexpected error during data update: {e}") from e
-
-    @abstractmethod
+    
     @retry_on_failure(max_retries=5)
+    async def _get_data_with_retry(self, *args, **kwargs):
+        """Fetch data from API with retry."""
+        return await self._get_data(*args, **kwargs)
+    
+    @abstractmethod
     async def _get_data(self, *args, **kwargs):
         """Fetch the data from the API."""
 
@@ -196,13 +200,20 @@ class SiteCoordinator(baseCoordinator):
             else:
                 err["code"] = response.status_code
                 raise UnexpectedStatusError(err)
+
+        except DataNotFoundError as e:
+            raise
+        except RecordNotFoundError as e:
+            raise
+        except UnexpectedStatusError as e:
+            raise
         except ApiAuthError:
             raise 
         except asyncio.TimeoutError as e:
-            err["exception"] = f"{e}"
+            err["exception"] = str(e)
             raise RequestTimeoutError(err) from e
         except Exception as e:
-            err["exception"] = f"{e}"
+            err["exception"] = str(e)
             raise RequestFailedError(err) from e
 
     def _parse_csv_response(self, response):
@@ -301,11 +312,16 @@ class MicroSensorCoordinator(baseCoordinator):
             else:
                 err["code"] = response.status_code
                 raise UnexpectedStatusError(err)
+
+        except DataNotFoundError as e:
+            raise
+        except UnexpectedStatusError as e:
+            raise
         except asyncio.TimeoutError as e:
-            err["exception"] = f"{e}"
+            err["exception"] = str(e)
             raise RequestTimeoutError(err) from e
         except Exception as e:
-            err["exception"] = f"{e}"
+            err["exception"] = str(e)
             raise RequestFailedError(err) from e
 
     def _parse_thing_data(self, thing_data):
