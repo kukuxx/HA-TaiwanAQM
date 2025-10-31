@@ -20,9 +20,10 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util.dt import as_local, parse_datetime
 
 from .const import (
-    API_URL,
     DOMAIN,
     HA_USER_AGENT,
+    SITE_API_URL,
+    MICRO_API_FILTER_PARAMS,
     MICRO_DATA_API_URL,
 )
 from .exceptions import (
@@ -174,7 +175,7 @@ class SiteCoordinator(baseCoordinator):
 
         try:
             response = await self.client.get(
-                API_URL, headers=headers, params=params, timeout=15
+                SITE_API_URL, headers=headers, params=params, timeout=15
             )
 
             if response.is_success:
@@ -269,26 +270,29 @@ class SiteCoordinator(baseCoordinator):
 class MicroSensorCoordinator(baseCoordinator):
     """Class to manage fetching data from the Micro Sensor API."""
 
-    def __init__(self, hass, station_id, thing_id):
+    def __init__(self, hass, station_ids):
         """Initialize the Micro Sensor coordinator."""
         super().__init__(
             hass,
-            name=f"{DOMAIN}_micro_{station_id}",
+            name=f"{DOMAIN}_micro_sensors",
             update_interval=timedelta(minutes=2),
         )
 
-        self.station_id = station_id
-        self.thing_id = thing_id
+        self.station_ids = station_ids
 
     async def _get_data(self):
         """Fetch the micro sensor data from the API."""
-        url = MICRO_DATA_API_URL.format(self.thing_id)
+        filter_params = " or ".join(
+            MICRO_API_FILTER_PARAMS.format(stationID=stationID) 
+            for stationID in self.station_ids
+        )
+        url = MICRO_DATA_API_URL.format(filter_params=filter_params)
         headers = {
             "Accept": "application/json",
             "User-Agent": HA_USER_AGENT,
         }
 
-        err = {"name": f"Micro_Sensor_{self.station_id}",}
+        err = {"name": f"Micro_Sensor",}
 
         try:
             response = await self.client.get(
@@ -298,13 +302,13 @@ class MicroSensorCoordinator(baseCoordinator):
             )
 
             if response.is_success:
-                thing_data = response.json()
+                res_data = response.json()
 
-                parsed_data = self._parse_thing_data(thing_data)
+                parsed_data = self._parse_thing_data(res_data)
                 if parsed_data:
                     _LOGGER.debug(
                         "Successfully fetched data for Micro Sensor %s",
-                        self.station_id,
+                        self.station_ids,
                     )
                     return parsed_data
                 else:
@@ -324,52 +328,59 @@ class MicroSensorCoordinator(baseCoordinator):
             err["exception"] = str(e)
             raise RequestFailedError(err) from e
 
-    def _parse_thing_data(self, thing_data):
+    def _parse_thing_data(self, res_data):
         """Parse Thing data and extract sensor values."""
+        # 感測器名稱映射表
+        sensor_mapping = {
+            "pm2.5": ["pm2.5", "pm25", "PM2.5", "PM25"],
+            "pm10": ["pm10", "PM10"],
+            "pm1": ["pm1", "PM1"],
+            "temperature": ["temperature", "Temperature"],
+            "humidity": ["humidity", "Humidity"],
+            "co": ["co", "CO"],
+            "o3": ["o3", "O3"],
+            "no2": ["no2", "NO2"],
+            "voc": ["voc", "tvoc", "TVOC"],
+        }
+
         try:
-            result = {
-                self.station_id: {}
-            }
-            # 感測器名稱映射表
-            sensor_mapping = {
-                "pm2.5": ["pm2.5", "pm25"],
-                "pm10": ["pm10"],
-                "pm1": ["pm1"],
-                "temperature": ["temperature"],
-                "humidity": ["humidity"],
-                "co": ["co"],
-                "o3": ["o3"],
-                "no2": ["no2"],
-                "voc": ["voc", "tvoc"],
-            }
+            if (
+                res_data.get("@iot.count", 0) == 0 
+                or not (value := res_data.get("value"))
+            ):
+                raise DataNotFoundError({"name": "Micro_Sensor"})
+            
+            result = {}
+            for data in value:
+                if (
+                    not (properties := data.get("properties"))
+                    or not (station_id := properties.get("stationID"))
+                    or station_id not in self.station_ids
+                ):
+                    continue
 
-            # 獲取縣市和區域
-            properties = thing_data.get("properties", {})
-            result[self.station_id]["city"] = properties.get(
-                "areaType", "unknown"
-            )
-            result[self.station_id]["area"] = properties.get(
-                "areaDescription", "unknown"
-            )
+                result[station_id] = {
+                    "thing_id": data.get("@iot.id"),
+                    "stationID": properties.get("stationID"),
+                    "Description": properties.get("Description"),
+                    "areaType": properties.get("areaType"),
+                    "areaDescription": properties.get("areaDescription"),
+                    "authority": properties.get("authority"),
+                }
+                
+                coords = self._parse_coordinates(data.get("Locations"))
+                result[station_id]["longitude"] = coords["lon"]
+                result[station_id]["latitude"] = coords["lat"]
 
-            # 獲取座標
-            location = thing_data.get("Locations", [{}])[0].get("location", {})
-            coords = location.get("coordinates", [])
-            if len(coords) >= 2:
-                parsed_coords = self._parse_coordinates(coords)
-                result[self.station_id]["longitude"] = parsed_coords["lon"]
-                result[self.station_id]["latitude"] = parsed_coords["lat"]
-            else:
-                result[self.station_id]["longitude"] = "unknown"
-                result[self.station_id]["latitude"] = "unknown"
+                # 解析 Datastreams
+                if not (datastreams := data.get("Datastreams")):
+                    continue
 
-            # 解析 Datastreams
-            datastreams = thing_data.get("Datastreams", [])
-            for datastream in datastreams:
-                name = datastream.get("name", "").lower()
-                observations = datastream.get("Observations", [])
+                for datastream in datastreams:
+                    if not (observations := datastream.get("Observations")):
+                        continue
 
-                if observations:
+                    name = datastream.get("name", "").lower()
                     latest_obs = observations[0]
                     value = latest_obs.get("result")
                     fresh_time = self._parse_datetime(
@@ -387,8 +398,8 @@ class MicroSensorCoordinator(baseCoordinator):
                             if sensor_type == "co" and "voc" in name:
                                 continue
 
-                            result[self.station_id][sensor_type] = value
-                            result[self.station_id][f"{sensor_type}_time"] = fresh_time
+                            result[station_id][sensor_type] = value
+                            result[station_id][f"{sensor_type}_time"] = fresh_time
                             break
 
             return result
@@ -396,10 +407,17 @@ class MicroSensorCoordinator(baseCoordinator):
             _LOGGER.error("Error parsing thing data: %s", e)
             return None
 
-    def _parse_coordinates(self, coords):
+    def _parse_coordinates(self, locations):
         """Parse coordinates and determine latitude and longitude."""
-        lat_range = (3.97, 26.38)  # 緯度範圍
-        lon_range = (109.60, 122.11)  # 經度範圍
+        if (
+            not locations 
+            or not (coords := locations[0].get("location", {}).get("coordinates"))
+            or len(coords) < 2
+        ):
+            return {"lat": "unknown", "lon": "unknown"}
+
+        lat_range = (10.36, 26.40)  # 緯度範圍
+        lon_range = (114.35, 122.11)  # 經度範圍
 
         a, b = coords[0], coords[1]
 
@@ -412,6 +430,9 @@ class MicroSensorCoordinator(baseCoordinator):
 
     def _parse_datetime(self, datetime_str):
         """Parse datetime string and return local datetime string."""
+        if not datetime_str:
+            return "unknown"
+
         try:
             utc_dt = parse_datetime(datetime_str)
             local_dt = as_local(utc_dt)

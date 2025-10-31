@@ -45,10 +45,11 @@
                 }
             },
             "error": {
-                "no_id": "請選擇一個測站",
-                "site_already_configured": "此測站已經配置過了"
+                "no_id": "請選擇一個測站"
             },
-            "abort": {}
+            "abort": {
+                "already_configured": "此測站已經配置過了"
+            }
         },
         "micro_sensor": {
             "initiate_flow": {
@@ -74,10 +75,11 @@
                 "no_station_id": "請輸入 Station ID",
                 "station_not_found": "找不到此 Station ID 的感測器",
                 "cannot_connect": "無法連接到 API",
-                "unknown": "未知錯誤",
-                "micro_sensor_already_configured": "此微型感測器已經配置過了"
+                "unknown": "未知錯誤"
             },
-            "abort": {}
+            "abort": {
+                "already_configured": "此微型感測器已經配置過了"
+            }
         }
     }
 }

@@ -8,9 +8,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import (
     CONF_STATION_ID,
     CONF_SITEID,
-    CONF_THING_ID,
     DOMAIN,
-    MICRO_COORDINATORS,
+    MICRO_COORDINATOR,
     SENSOR_INFO,
     SITE_COORDINATOR,
     SITENAME_DICT,
@@ -54,17 +53,12 @@ async def async_setup_entry(hass, entry, async_add_entities):
             # 處理微型感測器 subentry
             elif subentry.subentry_type == "micro_sensor":
                 station_id = subentry.data.get(CONF_STATION_ID)
-                thing_id = subentry.data.get(CONF_THING_ID)
-                coordinator = entry_data[MICRO_COORDINATORS].get(station_id)
-                if not coordinator:
-                    _LOGGER.warning("Micro sensor coordinator not found for station %s", station_id)
-                    continue
+                coordinator = entry_data[MICRO_COORDINATOR]
 
                 subentry_entities.extend([
                     MicroSensor(
                         coordinator=coordinator,
                         station_id=station_id,
-                        thing_id=thing_id,
                         aq_type=aq_type,
                         device_class=config["device_class"],
                         unit_of_measurement=config["unit"],
@@ -87,7 +81,6 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     except Exception as e:
         _LOGGER.error("setup sensor error: %s", e, exc_info=True)
-
 
 
 class AQMbaseSensor(CoordinatorEntity, RestoreSensor):
@@ -132,12 +125,12 @@ class AQMbaseSensor(CoordinatorEntity, RestoreSensor):
             )
 
     @property
-    def coordinator_data(self) -> dict:
-        return self.coordinator.data
+    def _coordinator_data(self) -> dict:
+        return self.coordinator.data.get(self._station_or_site_id, {})
     
     @property
     def _get_value(self):
-        return self.coordinator_data[self._station_or_site_id][self._aq_type]
+        return self._coordinator_data.get(self._aq_type)
 
     @property
     def device_info(self):
@@ -177,7 +170,7 @@ class AQMbaseSensor(CoordinatorEntity, RestoreSensor):
 
     @property
     def available(self):
-        return self._station_or_site_id in self.coordinator_data
+        return self.coordinator.last_update_success
 
     @property
     def name(self):
@@ -215,30 +208,19 @@ class AQMbaseSensor(CoordinatorEntity, RestoreSensor):
             else "micro sensor station"
         )
 
-        if not self.coordinator_data:
-            if _type == "site":
-                _LOGGER.error("No %s data available", _type)
-            else:
-                _LOGGER.error(
-                    "No %s data available for station %s",
-                    _type,
-                    self._station_or_site_id,
-                )
-            return False
-
-        if self._station_or_site_id not in self.coordinator_data:
+        if not self._coordinator_data:
             _LOGGER.warning(
                 "The %s ID '%s' is not in the data: %s",
                 _type,
                 self._station_or_site_id,
-                list(self.coordinator_data.keys()),
+                list(self._coordinator_data.keys()),
             )
             return False
 
         if (value := self._get_value) in [None, ""]:
             if value is None:
                 _LOGGER.debug(
-                    "The value for '%s' in %s ID '%s' is missing or None.",
+                    "API exception, The value for '%s' in %s ID '%s' is missing or None.",
                     self._aq_type,
                     _type,
                     self._station_or_site_id,
@@ -299,15 +281,15 @@ class SiteSensor(AQMbaseSensor):
 
     @property
     def extra_state_attributes(self):
-        if self.coordinator_data and self._siteid in self.coordinator_data:
-            lon = self.coordinator_data[self._siteid].get("longitude", "unknown")
-            lat = self.coordinator_data[self._siteid].get("latitude", "unknown")
+        if self._coordinator_data:
+            lon = self._coordinator_data.get("longitude", "unknown")
+            lat = self._coordinator_data.get("latitude", "unknown")
         else:
             lon = "unknown"
             lat = "unknown"
 
         return {
-            "site_id": self._siteid,
+            "siteID": self._siteid,
             "longitude": lon,
             "latitude": lat,
         }
@@ -320,7 +302,6 @@ class MicroSensor(AQMbaseSensor):
         self,
         coordinator,
         station_id,
-        thing_id,
         aq_type,
         device_class,
         unit_of_measurement=None,
@@ -342,7 +323,6 @@ class MicroSensor(AQMbaseSensor):
         )
 
         self._station_id = station_id
-        self._thing_id = thing_id
         _LOGGER.debug(
             "Initialized MicroSensor for station_id: %s, type: %s",
             self._station_id,
@@ -352,24 +332,21 @@ class MicroSensor(AQMbaseSensor):
 
     @property
     def extra_state_attributes(self):
-        if self.coordinator_data and self._station_id in self.coordinator_data:
-            thing_data = self.coordinator_data[self._station_id]
-
+        if self._coordinator_data:
             attrs = {
-                "city": thing_data.get("city", "unknown"),
-                "area": thing_data.get("area", "unknown"),
-                "station_id": self._station_id,
-                "thing_id": self._thing_id,
-                "longitude": thing_data.get("longitude", "unknown"),
-                "latitude": thing_data.get("latitude", "unknown"),
-                "last_update": thing_data.get(
-                    f"{self._aq_type}_time", "unknown"
-                ),
+                "thingID": self._coordinator_data.get("thing_id", "unknown"),
+                "stationID": self._station_id,
+                "Description": self._coordinator_data.get("Description", "unknown"),
+                "areaType": self._coordinator_data.get("areaType", "unknown"),
+                "areaDescription": self._coordinator_data.get("areaDescription", "unknown"),    
+                "authority": self._coordinator_data.get("authority", "unknown"),
+                "longitude": self._coordinator_data.get("longitude", "unknown"),
+                "latitude": self._coordinator_data.get("latitude", "unknown"),
+                "UpdateTime": self._coordinator_data.get(f"{self._aq_type}_time", "unknown"),
             }
 
             return attrs
         else:
             return {
-                "station_id": self._station_id,
-                "thing_id": self._thing_id,
+                "stationID": self._station_id,
             }

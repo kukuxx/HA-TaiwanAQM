@@ -11,7 +11,6 @@ from homeassistant.config_entries import (
     SubentryFlowResult,
 )
 from homeassistant.core import callback
-from homeassistant.helpers.httpx_client import get_async_client
 from homeassistant.helpers.selector import (
     SelectOptionDict,
     SelectSelector,
@@ -26,10 +25,7 @@ from .const import (
     CONF_API_KEY,
     CONF_SITEID,
     CONF_STATION_ID,
-    CONF_THING_ID,
     DOMAIN,
-    HA_USER_AGENT,
-    MICRO_ID_API_URL,
     SITEID_DICT,
     SITENAME_DICT,
 )
@@ -52,6 +48,7 @@ class TaiwanAQMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Taiwan AQM."""
 
     VERSION = 2
+    MINOR_VERSION = 2
 
     async def async_step_reauth(
         self, entry_data: Mapping[str, Any]
@@ -128,34 +125,15 @@ class TaiwanAQMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class SiteSubentryFlowHandler(ConfigSubentryFlow):
     """Handle subentry flow for adding and modifying monitoring sites."""
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> SubentryFlowResult:
-        """Handle the initial step."""
-        return await self.async_step_site()
-
     async def async_step_site(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
         """Site flow to add a new monitoring site."""
         errors: dict[str, str] = {}
 
-        # 取得已存在的站點 ID
-        config_entry = self._get_entry()
-        existing_site_ids = []
-        if hasattr(config_entry, 'subentries') and config_entry.subentries:
-            existing_site_ids = [
-                subentry.data.get(CONF_SITEID)
-                for subentry in config_entry.subentries
-                if (hasattr(subentry, 'subentry_type')
-                and subentry.subentry_type == "site")
-            ]
-
         if user_input is not None:
             if not user_input.get(CONF_SITEID):
                 errors["base"] = "no_id"
-            elif user_input[CONF_SITEID] in existing_site_ids:
-                errors["base"] = "site_already_configured"
             else:
                 site_id = user_input[CONF_SITEID]
                 site_name = SITENAME_DICT.get(site_id, f"Site {site_id}")
@@ -163,6 +141,7 @@ class SiteSubentryFlowHandler(ConfigSubentryFlow):
                 return self.async_create_entry(
                     title=site_name,
                     data=user_input,
+                    unique_id=f"{site_name}_{site_id}",
                 )
 
         schema = vol.Schema(
@@ -174,43 +153,12 @@ class SiteSubentryFlowHandler(ConfigSubentryFlow):
             data_schema=schema,
             errors=errors,
         )
+    
+    async_step_user = async_step_site
 
 
 class MicroSensorSubentryFlowHandler(ConfigSubentryFlow):
     """Handle subentry flow for adding micro sensors."""
-
-    @callback
-    async def _query_thing_id(
-        self, station_id: str
-    ) -> tuple[int | None, str | None, str]:
-        """Query Thing ID from API. Returns (thing_id,error)."""
-        try:
-            client = get_async_client(self.hass, False)
-            url = MICRO_ID_API_URL.format(station_id)
-            headers = {
-                "Accept": "application/json",
-                "User-Agent": HA_USER_AGENT,
-            }
-
-            response = await client.get(url, headers=headers, timeout=10)
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("@iot.count", 0) > 0:
-                    thing_id = data["value"][0]["@iot.id"]
-                    return thing_id, ""
-                else:
-                    return None, "station_not_found"
-            else:
-                return None, "cannot_connect"
-        except Exception as e:
-            _LOGGER.error("Error querying micro sensor API: %s", e)
-            return None, "unknown"
-
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> SubentryFlowResult:
-        """Handle the initial step."""
-        return await self.async_step_micro_sensor()
 
     async def async_step_micro_sensor(
         self, user_input: dict[str, Any] | None = None
@@ -218,35 +166,16 @@ class MicroSensorSubentryFlowHandler(ConfigSubentryFlow):
         """Micro sensor flow to add a new micro sensor."""
         errors: dict[str, str] = {}
 
-        # 取得已存在的 station ID
-        config_entry = self._get_entry()
-        existing_station_ids = []
-        if hasattr(config_entry, 'subentries') and config_entry.subentries:
-            existing_station_ids = [
-                subentry.data.get(CONF_STATION_ID)
-                for subentry in config_entry.subentries
-                if (hasattr(subentry, 'subentry_type')
-                and subentry.subentry_type == "micro_sensor")
-            ]
-
         if user_input is not None:
             station_id = user_input.get(CONF_STATION_ID)
             if not station_id:
                 errors["base"] = "no_station_id"
-            elif station_id in existing_station_ids:
-                errors["base"] = "micro_sensor_already_configured"
             else:
-                thing_id, error = await self._query_thing_id(station_id)
-                if error:
-                    errors["base"] = error
-                else:
-                    return self.async_create_entry(
-                        title=f"Micro Sensor-{station_id}",
-                        data={
-                            CONF_STATION_ID: station_id,
-                            CONF_THING_ID: thing_id,
-                        },
-                    )
+                return self.async_create_entry(
+                    title=f"Micro Sensor-{station_id}",
+                    data=user_input,
+                    unique_id=str(station_id),
+                )
 
         schema = vol.Schema(
             {vol.Required(CONF_STATION_ID): TEXT_SELECTOR}
@@ -257,3 +186,5 @@ class MicroSensorSubentryFlowHandler(ConfigSubentryFlow):
             data_schema=schema,
             errors=errors,
         )
+    
+    async_step_user = async_step_micro_sensor

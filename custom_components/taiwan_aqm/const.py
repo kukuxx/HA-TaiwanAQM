@@ -7,23 +7,24 @@ CONF_SITEID = "siteID"
 CONF_STATION_ID = "station_id"
 CONF_THING_ID = "thing_id"
 SITE_COORDINATOR = "SITE_COORDINATOR"
-MICRO_COORDINATORS = "MICRO_COORDINATORS"
+MICRO_COORDINATOR = "MICRO_COORDINATOR"
 MICRO_SENSOR_IDS = "MICRO_SENSOR_IDS"
 SITE_UPDATE_TASK = "SITE_UPDATE_TASK"
 
-API_URL = "https://data.moenv.gov.tw/api/v2/aqx_p_432"
+SITE_API_URL = "https://data.moenv.gov.tw/api/v2/aqx_p_432"
+
 MICRO_API_BASE_URL = "https://sta.colife.org.tw/STA_AirQuality_EPAIoT/v1.0"
-MICRO_ID_API_URL = (
-    f"{MICRO_API_BASE_URL}/Things?$filter=name eq '智慧城鄉空品微型感測器-{{}}'"
-)
+MICRO_API_FILTER_PARAMS = f"properties/stationID eq '{{stationID}}'"
 MICRO_DATA_API_URL = (
-    f"{MICRO_API_BASE_URL}/Things({{}})?$expand=Datastreams"
-    "($expand=Observations($orderby=phenomenonTime desc;$top=1))"
+    f"{MICRO_API_BASE_URL}/Things?$filter=({{filter_params}})&$expand=Locations,"
+    "Datastreams($expand=Observations($orderby=phenomenonTime desc;$top=1))"
 )
+
 HA_USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) HomeAssistant/HA-TaiwanAQM"
 )
+
 PLATFORM = [Platform.SENSOR]
 
 SITEID_DICT = {

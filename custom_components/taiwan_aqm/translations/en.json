@@ -48,7 +48,9 @@
                 "no_id": "Please select a site",
                 "site_already_configured": "This site is already configured"
             },
-            "abort": {}
+            "abort": {
+                "already_configured": "This site is already configured"
+            }
         },
         "micro_sensor": {
             "initiate_flow": {
@@ -74,10 +76,11 @@
                 "no_station_id": "Please enter a Station ID",
                 "station_not_found": "Sensor with this Station ID not found",
                 "cannot_connect": "Cannot connect to API",
-                "unknown": "Unknown error",
-                "micro_sensor_already_configured": "This micro sensor is already configured"
+                "unknown": "Unknown error"
             },
-            "abort": {}
+            "abort": {
+                "already_configured": "This micro sensor is already configured"
+            }
         }
     }
 }

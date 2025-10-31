@@ -1,5 +1,6 @@
 import logging
 
+from homeassistant.core import callback
 from homeassistant.config_entries import ConfigEntry, ConfigSubentry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
@@ -18,7 +19,7 @@ from .const import (
     CONF_THING_ID,
     SITENAME_DICT,
     SITE_COORDINATOR,
-    MICRO_COORDINATORS,
+    MICRO_COORDINATOR,
     MICRO_SENSOR_IDS,
     SITE_UPDATE_TASK,
     PLATFORM,
@@ -28,6 +29,7 @@ CONFIG_SCHEMA = cv.removed(DOMAIN, raise_if_present=True)
 _LOGGER = logging.getLogger(__name__)
 
 
+@callback
 def _get_site_ids_from_entry(entry: ConfigEntry) -> list[str]:
     """Get list of site IDs from config entry subentries."""
     # 確保 subentries 存在且可用
@@ -37,26 +39,28 @@ def _get_site_ids_from_entry(entry: ConfigEntry) -> list[str]:
     return [
         str(subentry.data.get(CONF_SITEID))
         for subentry in entry.subentries.values()
-        if hasattr(subentry, 'subentry_type')
-        and subentry.subentry_type == "site"
-        and subentry.data
+        if (
+            subentry.subentry_type == "site"
+            and subentry.data
+        )
     ]
 
 
-def _get_micro_sensor_ids_from_entry(entry: ConfigEntry) -> dict[str, str]:
+@callback
+def _get_micro_sensor_ids_from_entry(entry: ConfigEntry) -> list[str]:
     """Get list of thing IDs from config entry subentries."""
     # 確保 subentries 存在且可用
     if not hasattr(entry, 'subentries') or not entry.subentries:
-        return {}
+        return []
 
-    sensor_ids = {
-        str(subentry.data.get(CONF_STATION_ID)): str(subentry.data.get(CONF_THING_ID))
+    return [
+        str(subentry.data.get(CONF_STATION_ID))
         for subentry in entry.subentries.values()
-        if hasattr(subentry, 'subentry_type')
-        and subentry.subentry_type == "micro_sensor"
-        and subentry.data
-    }
-    return sensor_ids
+        if (
+            subentry.subentry_type == "micro_sensor"
+            and subentry.data
+        )
+    ]
 
 
 async def _async_setup_subentries(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -93,19 +97,15 @@ async def _async_setup_subentries(hass: HomeAssistant, entry: ConfigEntry) -> bo
         await site_coordinator.async_config_entry_first_refresh()
 
     if micro_sensor_ids:
-        micro_coordinators = {
-            station_id: MicroSensorCoordinator(hass, station_id, thing_id)
-            for station_id, thing_id in micro_sensor_ids.items()  
-        }
+        micro_coordinator = MicroSensorCoordinator(hass, micro_sensor_ids)
         config_data.update(
             {
-                MICRO_COORDINATORS: micro_coordinators,
+                MICRO_COORDINATOR: micro_coordinator,
                 MICRO_SENSOR_IDS: micro_sensor_ids,
             }
         )
         # 初始刷新
-        for coordinator in micro_coordinators.values():
-            await coordinator.async_config_entry_first_refresh()
+        await micro_coordinator.async_config_entry_first_refresh()
 
     # 初始化感測器平台
     platforms_loaded = False
@@ -116,7 +116,7 @@ async def _async_setup_subentries(hass: HomeAssistant, entry: ConfigEntry) -> bo
     _LOGGER.debug(
             "Setting up Taiwan AQM with sites: %s, micro sensors: %s",
             site_ids,
-            micro_sensor_ids.keys(),
+            micro_sensor_ids,
         )
 
     return platforms_loaded
@@ -193,8 +193,9 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Migrate config entry."""
     _LOGGER.debug(
-        "Migrating configuration from version %s",
+        "Migrating configuration from version %s, minor version %s",
         entry.version,
+        entry.minor_version,
     )
 
     # 未來版本無法處理
@@ -202,46 +203,97 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.error("Cannot migrate from future version")
         return False
 
-    # 從版本 1 遷移到版本 2
-    if entry.version < 2:
+    try:
         from copy import deepcopy
-        
-        data = deepcopy(dict(entry.data))
-        # 將舊的 CONF_SITEID 列表轉換為 subentries
-        old_site_ids = data.pop(CONF_SITEID, [])
-        del_device_identifiers = {
-                (DOMAIN, s_id)
-                for s_id in old_site_ids
-            }
-        _LOGGER.debug(f"remove dev_identifiers: {del_device_identifiers}")
-        if del_device_identifiers:
-            device_reg = dr.async_get(hass)
-            devices = [
-                device for device in
-                dr.async_entries_for_config_entry(device_reg, entry.entry_id)
-                if device.identifiers & del_device_identifiers
-            ]
-            for d in devices:
-                    device_reg.async_remove_device(d.id)
-                    _LOGGER.debug(f"removed device: {d.id}")
 
-        # 為每個站點創建 subentry
-        for site_id in old_site_ids:
-            site_name = SITENAME_DICT.get(str(site_id), f"Site {site_id}")
-            hass.config_entries.async_add_subentry(
+        # 從版本 1 遷移到版本 2
+        if entry.version < 2:
+            data = deepcopy(dict(entry.data))
+            # 將舊的 CONF_SITEID 列表轉換為 subentries
+            old_site_ids = data.pop(CONF_SITEID, [])
+            del_device_identifiers = {
+                    (DOMAIN, s_id)
+                    for s_id in old_site_ids
+                }
+            _LOGGER.debug(f"remove dev_identifiers: {del_device_identifiers}")
+            if del_device_identifiers:
+                device_reg = dr.async_get(hass)
+                devices = [
+                    device for device in
+                    dr.async_entries_for_config_entry(device_reg, entry.entry_id)
+                    if device.identifiers & del_device_identifiers
+                ]
+                for d in devices:
+                        device_reg.async_remove_device(d.id)
+                        _LOGGER.debug(f"removed device: {d.id}")
+
+            # 為每個站點創建 subentry
+            for site_id in old_site_ids:
+                site_name = SITENAME_DICT.get(str(site_id), f"Site {site_id}")
+                hass.config_entries.async_add_subentry(
+                    entry,
+                    ConfigSubentry(
+                        subentry_type="site",
+                        data={CONF_SITEID: str(site_id)},
+                        title=site_name,
+                        unique_id=None,
+                    ),
+                )
+
+            hass.config_entries.async_update_entry(
                 entry,
-                ConfigSubentry(
-                    subentry_type="site",
-                    data={CONF_SITEID: str(site_id)},
-                    title=site_name,
-                    unique_id=None,
-                ),
+                data=data,
+                version=2,
+                minor_version=1,
+            )
+        
+        elif entry.version == 2 and entry.minor_version < 2:
+            # 為每個 subentry 更新 unique_id
+            for subentry in entry.subentries.values():
+                if subentry.subentry_type == "site":
+                    site_data = deepcopy(dict(subentry.data))
+                    site_id = site_data.get(CONF_SITEID)
+                    site_name = SITENAME_DICT.get(str(site_id), f"Site {site_id}")
+                    hass.config_entries.async_update_subentry(
+                        entry,
+                        subentry, 
+                        data=site_data,
+                        title=subentry.title,
+                        unique_id=f"{site_name}_{site_id}",
+                    )
+                elif subentry.subentry_type == "micro_sensor":
+                    micro_data = deepcopy(dict(subentry.data))
+                    micro_data.pop(CONF_THING_ID, None)
+                    hass.config_entries.async_update_subentry(
+                        entry,
+                        subentry, 
+                        data=micro_data,
+                        title=subentry.title,
+                        unique_id=str(micro_data[CONF_STATION_ID]),
+                    )
+                
+                _LOGGER.debug(
+                    "Migrated subentry %s to version %s, minor version 2",
+                    subentry.subentry_id,
+                    entry.version,
+                )
+            
+            entry_data = deepcopy(dict(entry.data))
+            hass.config_entries.async_update_entry(
+                entry,
+                data=entry_data,
+                version=entry.version,
+                minor_version=2,
             )
 
-        hass.config_entries.async_update_entry(
-            entry,
-            data=data,
-            version=2,
-        )
+            _LOGGER.debug(
+                "Migrated entry %s to version %s, minor version 2",
+                entry.entry_id,
+                entry.version,
+            )
 
-    return True
+        return True
+
+    except Exception as e:
+        _LOGGER.error("async_migrate_entry error: %s", e)
+        return False
