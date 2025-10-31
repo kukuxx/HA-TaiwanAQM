@@ -251,10 +251,10 @@ def main():
     report = comparator.run()
     
     if report['has_changes']:
-        print("\n⚠️ 偵測到變更,exit code = 1")
-        sys.exit(1)
+        print("\n⚠️ 偵測到變更")
+        sys.exit(0)
     else:
-        print("\n✅ 無變更,exit code = 0")
+        print("\n✅ 無變更")
         sys.exit(0)
 
 
