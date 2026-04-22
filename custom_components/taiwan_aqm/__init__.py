@@ -68,58 +68,63 @@ async def _async_setup_subentries(hass: HomeAssistant, entry: ConfigEntry) -> bo
 
     Returns True if platforms were loaded, False otherwise.
     """
-    config_data = hass.data[DOMAIN][entry.entry_id]
-
-    # 從 subentries 獲取站點和微型感測器列表
-    site_ids = _get_site_ids_from_entry(entry)
-    micro_sensor_ids = _get_micro_sensor_ids_from_entry(entry)
-
-    # 創建 coordinators
-    if site_ids:
-        api_key = entry.data.get(CONF_API_KEY)
-        site_coordinator = SiteCoordinator(hass, api_key, site_ids)
-        # 設置定時刷新任務 (僅標準站點)
-        async def site_force_refresh_task(*args):
-            await site_coordinator.async_refresh()
-            timestamp = args[0].strftime("%Y-%m-%d %H:%M:%S %Z")
-            _LOGGER.debug("Force Refresh Success at: %s", timestamp)
-
-        site_update_task = async_track_time_change(
-            hass, site_force_refresh_task, minute=10, second=0
-        )
-        config_data.update(
-            {
-                SITE_COORDINATOR: site_coordinator,
-                SITE_UPDATE_TASK: site_update_task,
-            }
-        )
-        # 初始刷新
-        await site_coordinator.async_config_entry_first_refresh()
-
-    if micro_sensor_ids:
-        micro_coordinator = MicroSensorCoordinator(hass, micro_sensor_ids)
-        config_data.update(
-            {
-                MICRO_COORDINATOR: micro_coordinator,
-                MICRO_SENSOR_IDS: micro_sensor_ids,
-            }
-        )
-        # 初始刷新
-        await micro_coordinator.async_config_entry_first_refresh()
-
-    # 初始化感測器平台
     platforms_loaded = False
-    if site_ids or micro_sensor_ids:
-        await hass.config_entries.async_forward_entry_setups(entry, PLATFORM)
-        platforms_loaded = True
 
-    _LOGGER.debug(
-            "Setting up Taiwan AQM with sites: %s, micro sensors: %s",
-            site_ids,
-            micro_sensor_ids,
-        )
+    try:
+        config_data = hass.data[DOMAIN][entry.entry_id]
 
-    return platforms_loaded
+        # 從 subentries 獲取站點和微型感測器列表
+        site_ids = _get_site_ids_from_entry(entry)
+        micro_sensor_ids = _get_micro_sensor_ids_from_entry(entry)
+
+        # 創建 coordinators
+        if site_ids:
+            api_key = entry.data.get(CONF_API_KEY)
+            site_coordinator = SiteCoordinator(hass, api_key, site_ids)
+            # 設置定時刷新任務 (僅標準站點)
+            async def site_force_refresh_task(*args):
+                await site_coordinator.async_refresh()
+                timestamp = args[0].strftime("%Y-%m-%d %H:%M:%S %Z")
+                _LOGGER.debug("Force Refresh Success at: %s", timestamp)
+
+            site_update_task = async_track_time_change(
+                hass, site_force_refresh_task, minute=10, second=0
+            )
+            config_data.update(
+                {
+                    SITE_COORDINATOR: site_coordinator,
+                    SITE_UPDATE_TASK: site_update_task,
+                }
+            )
+            # 初始刷新
+            await site_coordinator.async_config_entry_first_refresh()
+
+        if micro_sensor_ids:
+            micro_coordinator = MicroSensorCoordinator(hass, micro_sensor_ids)
+            config_data.update(
+                {
+                    MICRO_COORDINATOR: micro_coordinator,
+                    MICRO_SENSOR_IDS: micro_sensor_ids,
+                }
+            )
+            # 初始刷新
+            await micro_coordinator.async_config_entry_first_refresh()
+
+        # 初始化感測器平台
+        if site_ids or micro_sensor_ids:
+            await hass.config_entries.async_forward_entry_setups(entry, PLATFORM)
+            platforms_loaded = True
+
+            _LOGGER.debug(
+                    "Setting up Taiwan AQM with sites: %s, micro sensors: %s",
+                    site_ids,
+                    micro_sensor_ids,
+                )
+
+        return platforms_loaded
+    except Exception as e:
+        _LOGGER.exception("Error setting up subentries: %s", e)
+        return platforms_loaded
     
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -142,7 +147,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.error("API key authentication failed: %s", e)
         raise
     except Exception as e:
-        _LOGGER.error("async_setup_entry error: %s", e)
+        _LOGGER.exception("async_setup_entry error: %s", e)
         return False
 
 
@@ -151,7 +156,7 @@ async def update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     try:
         await hass.config_entries.async_reload(entry.entry_id)
     except Exception as e:
-        _LOGGER.error("update_listener error: %s", e)
+        _LOGGER.exception("update_listener error: %s", e)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -181,7 +186,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         return True
     except Exception as e:
-        _LOGGER.error("async_unload_entry error: %s", e)
+        _LOGGER.exception("async_unload_entry error: %s", e)
         return False
 
 
@@ -207,7 +212,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         from copy import deepcopy
 
         # 從版本 1 遷移到版本 2
-        if entry.version < 2:
+        if entry.version == 1:
             data = deepcopy(dict(entry.data))
             # 將舊的 CONF_SITEID 列表轉換為 subentries
             old_site_ids = data.pop(CONF_SITEID, [])
@@ -230,11 +235,12 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             # 為每個站點創建 subentry
             for site_id in old_site_ids:
                 site_name = SITENAME_DICT.get(str(site_id), f"Site {site_id}")
+                subentry_data = {CONF_SITEID: str(site_id)}
                 hass.config_entries.async_add_subentry(
                     entry,
                     ConfigSubentry(
                         subentry_type="site",
-                        data={CONF_SITEID: str(site_id)},
+                        data=subentry_data,
                         title=site_name,
                         unique_id=None,
                     ),
@@ -295,5 +301,5 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return True
 
     except Exception as e:
-        _LOGGER.error("async_migrate_entry error: %s", e)
+        _LOGGER.exception("async_migrate_entry error: %s", e)
         return False

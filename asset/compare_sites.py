@@ -2,6 +2,7 @@
 比對環保署空氣品質監測站點資料
 """
 import csv
+import json
 import sys
 import os
 import subprocess
@@ -20,34 +21,45 @@ class SiteComparator:
         self.api_sites: Set[Tuple[str, str, str]] = set()
         self.expected_sites: Set[Tuple[str, str, str]] = set()
 
-    def fetch_api_data(self) -> None:
-        """從 API 下載 CSV 資料並解析"""
+    def _fetch_api_data(self) -> None:
+        """從 API 下載 CSV 資料並解析（最多重試5次）"""
         print("📡 正在下載 API 資料...")
-        try:
-            response = requests.get(self.api_url, timeout=30, verify=False)
-            response.raise_for_status()
-            
-            # 處理 BOM
-            content = response.content.decode('utf-8-sig')
-                
-            csv_reader = csv.DictReader(content.splitlines())
-            for row in csv_reader:
-                siteid = self.clean(row.get('siteid', ''))
-                sitename =self.clean(row.get('sitename', ''))
-                county = self.clean(row.get('county', ''))
-                
-                if siteid and sitename and county:
-                    self.api_sites.add((siteid, sitename, county))
-            
-            print(f"✅ 成功取得 {len(self.api_sites)} 個站點")
-        except requests.exceptions.RequestException as e:
-            print(f"❌ 下載 API 資料失敗: {e}", file=sys.stderr)
-            sys.exit(1)
-        except Exception as e:
-            print(f"❌ 清洗API資料失敗: {e}", file=sys.stderr)
-            sys.exit(1)
 
-    def load_expected_data(self) -> None:
+        max_retries = 5
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                response = requests.get(self.api_url, timeout=30, verify=False)
+                response.raise_for_status()
+
+                content = response.content.decode('utf-8-sig')
+                csv_reader = csv.DictReader(content.splitlines())
+
+                for row in csv_reader:
+                    siteid = self._clean(row.get('siteid', ''))
+                    sitename = self._clean(row.get('sitename', ''))
+                    county = self._clean(row.get('county', ''))
+
+                    if siteid and sitename and county:
+                        self.api_sites.add((siteid, sitename, county))
+
+                if self.api_sites:
+                    print(f"✅ 成功取得 {len(self.api_sites)} 個站點 (嘗試第 {attempt} 次)")
+                    return
+                else:
+                    print(f"⚠️ 第 {attempt} 次取得 0 筆資料，重試中...")
+
+            except requests.exceptions.RequestException as e:
+                print(f"❌ 第 {attempt} 次下載失敗: {e}", file=sys.stderr)
+
+            except Exception as e:
+                print(f"❌ 第 {attempt} 次資料處理失敗: {e}", file=sys.stderr)
+
+        # 全部重試失敗
+        print("❌ 重試 5 次仍然無法取得有效資料", file=sys.stderr)
+        sys.exit(1)
+
+    def _load_expected_data(self) -> None:
         """載入預期的站點資料"""
         print("📂 正在載入預期站點資料...")
         try:
@@ -55,9 +67,9 @@ class SiteComparator:
                 csv_reader = csv.DictReader(f)
                 
                 for row in csv_reader:
-                    siteid = self.clean(row.get('siteid', ''))
-                    sitename = self.clean(row.get('sitename', ''))
-                    county = self.clean(row.get('county', ''))
+                    siteid = self._clean(row.get('siteid', ''))
+                    sitename = self._clean(row.get('sitename', ''))
+                    county = self._clean(row.get('county', ''))
                     
                     if siteid and sitename and county:
                         self.expected_sites.add((siteid, sitename, county))
@@ -70,14 +82,14 @@ class SiteComparator:
             print(f"❌ 載入原始資料失敗: {e}", file=sys.stderr)
             sys.exit(1)
 
-    def clean(self, text: str) -> str:
+    def _clean(self, text: str) -> str:
         if not text:
             return ''
         text = unicodedata.normalize('NFKC', text)  # 全形→半形
         text = re.sub(r'\s+', '', text)              # 移除所有空白
         return text
 
-    def compare(self) -> Tuple[List[Dict], List[Dict]]:
+    def _compare(self) -> Tuple[List[Dict], List[Dict]]:
         """比對站點差異"""
         print("🔍 正在比對站點...")
         
@@ -96,7 +108,7 @@ class SiteComparator:
         
         return new_sites_list, removed_sites_list
 
-    def generate_report(self, new_sites: List[Dict], removed_sites: List[Dict]) -> Dict:
+    def _generate_report(self, new_sites: List[Dict], removed_sites: List[Dict]) -> Dict:
         """生成比對報告"""
         report = {
             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -112,7 +124,7 @@ class SiteComparator:
         }
         return report
 
-    def print_summary(self, report: Dict) -> None:
+    def _print_summary(self, report: Dict) -> None:
         """輸出摘要到終端"""
         print("\n" + "="*60)
         print(f"📊 比對結果摘要 ({report['timestamp']})")
@@ -137,7 +149,7 @@ class SiteComparator:
         
         print("="*60)
 
-    def generate_github_summary(self, report: Dict) -> None:
+    def _generate_github_summary(self, report: Dict) -> None:
         """生成 GitHub Actions Summary"""
         summary_file = os.environ.get('GITHUB_STEP_SUMMARY')
         if not summary_file:
@@ -177,37 +189,53 @@ class SiteComparator:
         
         print("✅ GitHub Summary 已生成")
 
-    def create_or_update_issue(self, report: Dict) -> None:
-        """建立或更新 GitHub Issue"""
+    def _build_issue_body(self, report: Dict) -> str:
+        """生成issue body"""
+        def _render_sites(sites):
+            return "\n".join(
+                f"- {s['siteid']}: {s['sitename']} ({s['county']})"
+                for s in sites
+            )
+
+        parts = ["# 🚨 Changes Detected in Site list:\n"]
+
         if not report['has_changes']:
-            print("✅ 無變更,不需要建立 Issue")
-            return
-        
-        gh_token = os.environ.get('GH_TOKEN') or os.environ.get('GITHUB_TOKEN')
-        if not gh_token:
-            print("⚠️ 找不到 GitHub Token,跳過 Issue 建立")
-            return
-        
-        print("🔔 正在處理 GitHub Issue...")
-        
-        # 建立 Issue Body
-        body = "🚨 Changes detected in Site list:\n\n"
-        
-        if report['new_sites']:
-            body += "### 🆕 New Sites:\n\n"
-            for site in report['new_sites']:
-                body += f"- {site['siteid']}: {site['sitename']} ({site['county']})\n"
-            body += "\n"
-        
-        if report['removed_sites']:
-            body += "### ❌ Removed Sites:\n\n"
-            for site in report['removed_sites']:
-                body += f"- {site['siteid']}: {site['sitename']} ({site['county']})\n"
-            body += "\n"
-        
-        body += f"---\n\n**檢查時間:** {report['timestamp']}\n"
-        
+            parts += [
+                "### ✅ 無站點變更\n",
+                "所有站點與預期相符,未偵測到任何變更。\n"
+            ]
+        else:
+            if report['new_sites']:
+                parts += [
+                    "### 🆕 New Sites:\n",
+                    _render_sites(report['new_sites']),
+                    ""
+                ]
+
+            if report['removed_sites']:
+                parts += [
+                    "### ❌ Removed Sites:\n",
+                    _render_sites(report['removed_sites']),
+                    ""
+                ]
+
+            parts.append("@kukuxx\n")
+
+        parts.append(f"---\n\n**檢查時間:** {report['timestamp']}")
+
+        return "\n".join(parts)
+
+    def _create_or_update_issue(self, report: Dict) -> None:
+        """建立或更新 GitHub Issue"""
         try:
+            print("🔔 正在處理 GitHub Issue...")
+
+            gh_token = os.environ.get('GH_TOKEN') or os.environ.get('GITHUB_TOKEN')
+            if not gh_token:
+                raise RuntimeError("⚠️ 找不到 GitHub Token,跳過 Issue 建立")
+
+            body = self._build_issue_body(report)
+            
             # 檢查是否已有相同標籤的 Issue
             result = subprocess.run(
                 ['gh', 'issue', 'list', '--state', 'open', '--label', 'site change', '--json', 'number'],
@@ -237,16 +265,18 @@ class SiteComparator:
             print(f"❌ 處理 Issue 失敗: {e}", file=sys.stderr)
         except FileNotFoundError:
             print("❌ 找不到 gh 指令,請確認已安裝 GitHub CLI", file=sys.stderr)
+        except Exception as e:
+            print(f"❌ 處理 Issue 失敗: {e}")
 
     def run(self) -> Dict:
         """執行完整的比對流程"""
-        self.fetch_api_data()
-        self.load_expected_data()
-        new_sites, removed_sites = self.compare()
-        report = self.generate_report(new_sites, removed_sites)
-        self.print_summary(report)
-        self.generate_github_summary(report)
-        self.create_or_update_issue(report)
+        self._fetch_api_data()
+        self._load_expected_data()
+        new_sites, removed_sites = self._compare()
+        report = self._generate_report(new_sites, removed_sites)
+        self._print_summary(report)
+        self._generate_github_summary(report)
+        self._create_or_update_issue(report)
         return report
 
 
