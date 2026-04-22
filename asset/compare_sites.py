@@ -1,11 +1,12 @@
 """
 比對環保署空氣品質監測站點資料
 """
-import json
 import csv
 import sys
 import os
 import subprocess
+import unicodedata
+import re
 
 from typing import List, Dict, Set, Tuple
 from datetime import datetime
@@ -31,9 +32,9 @@ class SiteComparator:
                 
             csv_reader = csv.DictReader(content.splitlines())
             for row in csv_reader:
-                siteid = row.get('siteid', '').strip()
-                sitename = row.get('sitename', '').strip()
-                county = row.get('county', '').strip()
+                siteid = self.clean(row.get('siteid', ''))
+                sitename =self.clean(row.get('sitename', ''))
+                county = self.clean(row.get('county', ''))
                 
                 if siteid and sitename and county:
                     self.api_sites.add((siteid, sitename, county))
@@ -43,31 +44,38 @@ class SiteComparator:
             print(f"❌ 下載 API 資料失敗: {e}", file=sys.stderr)
             sys.exit(1)
         except Exception as e:
-            print(f"❌ 處理資料失敗: {e}", file=sys.stderr)
+            print(f"❌ 清洗API資料失敗: {e}", file=sys.stderr)
             sys.exit(1)
 
     def load_expected_data(self) -> None:
         """載入預期的站點資料"""
         print("📂 正在載入預期站點資料...")
         try:
-            with open(self.expected_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+            with open(self.expected_file, 'r', encoding='utf-8-sig') as f:
+                csv_reader = csv.DictReader(f)
                 
-            for site in data:
-                siteid = str(site.get('siteid', '')).strip()
-                sitename = site.get('sitename', '').strip()
-                county = site.get('county', '').strip()
-                
-                if siteid and sitename and county:
-                    self.expected_sites.add((siteid, sitename, county))
+                for row in csv_reader:
+                    siteid = self.clean(row.get('siteid', ''))
+                    sitename = self.clean(row.get('sitename', ''))
+                    county = self.clean(row.get('county', ''))
+                    
+                    if siteid and sitename and county:
+                        self.expected_sites.add((siteid, sitename, county))
             
             print(f"✅ 成功載入 {len(self.expected_sites)} 個預期站點")
         except FileNotFoundError:
             print(f"❌ 找不到檔案: {self.expected_file}", file=sys.stderr)
             sys.exit(1)
-        except json.JSONDecodeError as e:
-            print(f"❌ JSON 格式錯誤: {e}", file=sys.stderr)
+        except Exception as e:
+            print(f"❌ 載入原始資料失敗: {e}", file=sys.stderr)
             sys.exit(1)
+
+    def clean(self, text: str) -> str:
+        if not text:
+            return ''
+        text = unicodedata.normalize('NFKC', text)  # 全形→半形
+        text = re.sub(r'\s+', '', text)              # 移除所有空白
+        return text
 
     def compare(self) -> Tuple[List[Dict], List[Dict]]:
         """比對站點差異"""
@@ -243,9 +251,9 @@ class SiteComparator:
 
 
 def main():
-    api_url = "https://data.moenv.gov.tw/api/v2/aqx_p_432?api_key=e75b1660-e564-4107-aad5-a8be1f905dd9&limit=1000&sort=ImportDate%20desc&format=CSV"
+    api_url = "https://data.moenv.gov.tw/api/v2/aqx_p_432?api_key=e75b1660-e564-4107-aad5-a8be1f905dd9&sort=ImportDate%20desc&format=CSV"
     
-    expected_file = "asset/expected_sites.json"
+    expected_file = "asset/aqx_p_432.csv"
     
     comparator = SiteComparator(api_url, expected_file)
     report = comparator.run()
